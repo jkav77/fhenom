@@ -1,0 +1,5 @@
+if(EXISTS "/Users/dangerginger/code/FHEnom/build/tests/ckks_vector_test[1]_tests.cmake")
+  include("/Users/dangerginger/code/FHEnom/build/tests/ckks_vector_test[1]_tests.cmake")
+else()
+  add_test(ckks_vector_test_NOT_BUILT ckks_vector_test_NOT_BUILT)
+endif()
