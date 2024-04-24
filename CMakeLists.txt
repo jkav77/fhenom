@@ -35,7 +35,7 @@ target_include_directories( ${PROJECT_NAME} PUBLIC
     $<INSTALL_INTERFACE:include/fhenom>
 )
 target_include_directories( ${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include )
-target_link_libraries( ${PROJECT_NAME} PRIVATE OPENFHEcore OPENFHEpke -fopenmp spdlog::spdlog )
+target_link_libraries( ${PROJECT_NAME} PRIVATE OPENFHEcore OPENFHEpke OPENFHEbinfhe -fopenmp spdlog::spdlog )
 
 install(TARGETS ${PROJECT_NAME}
     EXPORT ${PROJECT_NAME}Targets

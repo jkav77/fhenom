@@ -1,9 +1,9 @@
+#include "fhenom/ckks_vector.h"
+
 #include <openfhe.h>
 
 #include <filesystem>
 #include <vector>
-
-#include "fhenom/ckks_vector.h"
 
 // Serialization stuff
 #include <ciphertext-ser.h>
@@ -20,7 +20,8 @@ using lbcrypto::DCRTPoly;
 //////////////////////////////////////////////////////////////////////////////
 // Homomorphic Operations
 
-CkksVector CkksVector::SignUsingChebyshev(const double lower_bound, const double upper_bound,
+CkksVector CkksVector::SignUsingChebyshev(const double lower_bound,
+                                          const double upper_bound,
                                           uint32_t degree) const {
   auto cryptoContext = context_.getCryptoContext();
 
@@ -44,7 +45,8 @@ CkksVector CkksVector::SignUsingChebyshev(const double lower_bound, const double
 }
 
 CkksVector CkksVector::IsEqual(const double value) const {
-  auto diff = (*this) - value;
+  auto vec = *this;
+  auto diff = vec - value;
   auto sign = diff.Sign();
   return 1 - (sign * sign);
 }
@@ -55,7 +57,7 @@ CkksVector CkksVector::Sum() const {
   CkksVector result(context_);
   result.setNumElements(1);
   result.data_.push_back(cryptoContext->EvalSum(data_[0], batch_size));
-  for (int i = 1; i < data_.size(); ++i) {
+  for (unsigned i = 1; i < data_.size(); ++i) {
     result.data_[0] += cryptoContext->EvalSum(data_[i], batch_size);
   }
   return result;
@@ -76,12 +78,13 @@ CkksVector CkksVector::rotate(int rows_to_rotate) const {
 
   std::vector<Ctxt> result;
 
-  for (int i = 0; i < data_.size(); ++i) {
+  for (unsigned i = 0; i < data_.size(); ++i) {
     if (precomputedRotations_.empty()) {
       result.emplace_back(cryptoContext->EvalRotate(data_[i], rows_to_rotate));
     } else {
       result.emplace_back(cryptoContext->EvalFastRotation(
-          data_[i], rows_to_rotate, cryptoContext->GetCyclotomicOrder(), precomputedRotations_[i]));
+          data_[i], rows_to_rotate, cryptoContext->GetCyclotomicOrder(),
+          precomputedRotations_[i]));
     }
   }
 
@@ -103,12 +106,13 @@ CkksVector& CkksVector::operator*=(const std::vector<double>& rhs) {
     throw std::invalid_argument("Cannot multiply vectors of different sizes.");
   }
 
-  for (int i = 0; i < data_.size(); ++i) {
+  for (unsigned i = 0; i < data_.size(); ++i) {
     auto start = rhs.begin() + i * batch_size;
-    auto end = rhs.begin() + std::min((i + 1) * batch_size, static_cast<unsigned>(rhs.size()));
+    auto end = rhs.begin() + std::min((i + 1) * batch_size,
+                                      static_cast<unsigned>(rhs.size()));
     auto values_slice = std::vector<double>(start, end);
-    data_[i] =
-        cryptoContext->EvalMult(data_[i], cryptoContext->MakeCKKSPackedPlaintext(values_slice));
+    data_[i] = cryptoContext->EvalMult(
+        data_[i], cryptoContext->MakeCKKSPackedPlaintext(values_slice));
   }
 
   return *this;
@@ -127,7 +131,7 @@ CkksVector& CkksVector::operator*=(const CkksVector& rhs) {
     throw std::invalid_argument("Cannot multiply vectors of different sizes.");
   }
 
-  for (int i = 0; i < data_.size(); ++i) {
+  for (unsigned i = 0; i < data_.size(); ++i) {
     data_[i] = cryptoContext->EvalMult(data_[i], rhs.data_[i]);
   }
 
@@ -142,7 +146,7 @@ CkksVector& CkksVector::operator+=(const CkksVector& rhs) {
 
   precomputedRotations_.clear();
 
-  for (int i = 0; i < data_.size(); ++i) {
+  for (unsigned i = 0; i < data_.size(); ++i) {
     data_[i] = context_.getCryptoContext()->EvalAdd(data_[i], rhs.data_[i]);
   }
 
@@ -159,7 +163,8 @@ CkksVector& CkksVector::operator-=(const double& rhs) {
   return *this;
 }
 
-CkksVector fhenom::operator-(const double& lhs, CkksVector rhs) {
+namespace fhenom {
+CkksVector operator-(const double& lhs, CkksVector rhs) {
   rhs.precomputedRotations_.clear();
   for (auto& ctxt : rhs.data_) {
     ctxt = rhs.context_.getCryptoContext()->EvalSub(lhs, ctxt);
@@ -167,13 +172,15 @@ CkksVector fhenom::operator-(const double& lhs, CkksVector rhs) {
 
   return rhs;
 }
+}  // namespace fhenom
 
 void CkksVector::precomputeRotations() {
   auto cryptoContext = context_.getCryptoContext();
 
   precomputedRotations_.clear();
   for (auto& ctxt : data_) {
-    precomputedRotations_.emplace_back(cryptoContext->EvalFastRotationPrecompute(ctxt));
+    precomputedRotations_.emplace_back(
+        cryptoContext->EvalFastRotationPrecompute(ctxt));
   }
 }
 
@@ -191,7 +198,8 @@ void CkksVector::Concat(const CkksVector& rhs) {
   if (rhs.precomputedRotations_.empty()) {
     precomputedRotations_.clear();
   } else {
-    precomputedRotations_.insert(precomputedRotations_.end(), rhs.precomputedRotations_.begin(),
+    precomputedRotations_.insert(precomputedRotations_.end(),
+                                 rhs.precomputedRotations_.begin(),
                                  rhs.precomputedRotations_.end());
   }
 }
@@ -221,11 +229,13 @@ void CkksVector::encrypt(const std::vector<double>& data) {
 
   for (size_t i = 0; i < data.size();
        i += context_.getCryptoContext()->GetEncodingParams()->GetBatchSize()) {
-    auto end =
-        std::min(i + context_.getCryptoContext()->GetEncodingParams()->GetBatchSize(), data.size());
+    auto end = std::min(
+        i + context_.getCryptoContext()->GetEncodingParams()->GetBatchSize(),
+        data.size());
     const auto tmp = std::vector<double>(data.begin() + i, data.begin() + end);
     auto ptxt = context_.getCryptoContext()->MakeCKKSPackedPlaintext(tmp);
-    auto ctxt = context_.getCryptoContext()->Encrypt(context_.getKeyPair().publicKey, ptxt);
+    auto ctxt = context_.getCryptoContext()->Encrypt(
+        context_.getKeyPair().publicKey, ptxt);
     this->data_.push_back(ctxt);
   }
 
@@ -251,10 +261,12 @@ std::vector<double> CkksVector::decrypt() const {
   std::vector<double> result;
   for (const auto& ctxt : data_) {
     Ptxt ptxt;
-    context_.getCryptoContext()->Decrypt(context_.getKeyPair().secretKey, ctxt, &ptxt);
+    context_.getCryptoContext()->Decrypt(context_.getKeyPair().secretKey, ctxt,
+                                         &ptxt);
 
     auto remaining = numElements_ - result.size();
-    if (remaining < context_.getCryptoContext()->GetEncodingParams()->GetBatchSize()) {
+    if (remaining <
+        context_.getCryptoContext()->GetEncodingParams()->GetBatchSize()) {
       ptxt->SetLength(remaining);
     }
 

@@ -30,7 +30,7 @@ double Tensor::get(shape_t coordinates) const {
   }
 
   int index = 0;
-  for (int i = 0; i < shape_.size() - 1; ++i) {
+  for (unsigned i = 0; i < shape_.size() - 1; ++i) {
     if (coordinates[i] > shape_[i] || coordinates[i] < 0) {
       throw std::invalid_argument("Index out of bounds");
     }

@@ -1,7 +1,7 @@
-#include <utility>
+#include <fhenom/ckks_tensor.h>
+#include <fhenom/ckks_vector.h>
 
-#include "fhenom/ckks_tensor.h"
-#include "fhenom/ckks_vector.h"
+#include <utility>
 
 using fhenom::CkksTensor;
 using fhenom::Tensor;
@@ -16,7 +16,8 @@ void CkksTensor::setData(CkksVector data, shape_t shape) {
     len *= dim;
   }
   if (data.size() != len) {
-    spdlog::error("Data vector size ({}) does not match shape ({})", data.size(), len);
+    spdlog::error("Data vector size ({}) does not match shape ({})",
+                  data.size(), len);
     throw std::invalid_argument("Data vector size does not match shape");
   }
 
@@ -30,9 +31,10 @@ CkksTensor CkksTensor::conv2D(Tensor kernel) {
   auto channel_size = shape_[0] * shape_[1];
   // auto num_channels = kernel_shape[2];
   auto num_filters = kernel_shape[3];
-  auto rotation_range = (kernel_size - 1) / 2;
+  int rotation_range = (kernel_size - 1) / 2;
   auto cryptoContext = data_.getContext().getCryptoContext();
-  auto channels_per_ctxt = cryptoContext->GetEncodingParams()->GetBatchSize() / channel_size;
+  auto channels_per_ctxt =
+      cryptoContext->GetEncodingParams()->GetBatchSize() / channel_size;
   auto num_ctxts = num_filters / channels_per_ctxt;
 
   if (kernel_shape.size() != 4) {
@@ -66,7 +68,7 @@ CkksTensor CkksTensor::conv2D(Tensor kernel) {
   std::vector<CkksVector> rotated_ctxts;
   data_.precomputeRotations();
 
-  for (int range = static_cast<int>(-rotation_range); range <= rotation_range; ++range) {
+  for (int range = -rotation_range; range <= rotation_range; ++range) {
     rotated_ctxts.emplace_back(data_.rotate(range));
   }
 
@@ -74,11 +76,12 @@ CkksTensor CkksTensor::conv2D(Tensor kernel) {
 
   std::vector<CkksVector> intermediate_results(kernel_size);
 #pragma omp parallel for
-  for (int ctxt_index = 0; ctxt_index < num_ctxts; ++ctxt_index) {
-    for (int filter_index = 0; filter_index < channels_per_ctxt; ++filter_index) {
+  for (unsigned ctxt_index = 0; ctxt_index < num_ctxts; ++ctxt_index) {
+    for (unsigned filter_index = 0; filter_index < channels_per_ctxt;
+         ++filter_index) {
       auto kernel_vectors = createMaskedConvVectors(kernel, filter_index);
 
-      for (int i = 0; i < kernel_size; ++i) {
+      for (unsigned i = 0; i < kernel_size; ++i) {
         intermediate_results[i] = rotated_ctxts[i] * kernel_vectors[i];
       }
 
@@ -88,8 +91,10 @@ CkksTensor CkksTensor::conv2D(Tensor kernel) {
       }
 
       intermediate_results[filter_index] +=
-          intermediate_results[0].rotate(static_cast<int>(shape_[0] * shape_[1])) +
-          intermediate_results[0].rotate(static_cast<int>(2 * shape_[0] * shape_[1]));
+          intermediate_results[0].rotate(
+              static_cast<int>(shape_[0] * shape_[1])) +
+          intermediate_results[0].rotate(
+              static_cast<int>(2 * shape_[0] * shape_[1]));
       intermediate_results[0].setNumElements(shape_[0] * shape_[1]);
     }
   }
@@ -137,14 +142,14 @@ std::vector<std::vector<double>> CkksTensor::createMaskedConvVectors(
       }
 
       // Account for rotations
-      for (int i = -rotation_range; i <= rotation_range; ++i) {
+      for (unsigned i = -rotation_range; i <= rotation_range; ++i) {
         auto vec = masked_vectors[i + rotation_range];
         if (i < 0) {
           vec.insert(vec.begin(), -i, 0);
           vec.erase(vec.end() + i, vec.end());
         } else if (i > 0) {
           vec.erase(vec.begin(), vec.begin() + i);
-          for (int j = 0; j < i; ++j) {
+          for (unsigned j = 0; j < i; ++j) {
             vec.push_back(0);
           }
         }

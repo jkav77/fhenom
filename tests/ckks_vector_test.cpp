@@ -1,10 +1,9 @@
 #include <fhenom/ckks_vector.h>
+#include <gtest/gtest.h>
 #include <spdlog/spdlog.h>
 
 #include <filesystem>
 #include <vector>
-
-#include "gtest/gtest.h"
 
 using fhenom::CkksVector;
 
@@ -128,7 +127,7 @@ TEST_F(CkksVectorTest, decrypt) {
   auto decrypted = ckksVector.decrypt();
 
   ASSERT_EQ(decrypted.size(), testData.size());
-  for (int i = 0; i < testData.size(); ++i) {
+  for (unsigned i = 0; i < testData.size(); ++i) {
     ASSERT_NEAR(decrypted[i], testData[i], epsilon);
   }
 }
@@ -141,7 +140,7 @@ TEST_F(CkksVectorTest, Sign) {
   auto decrypted = result.decrypt();
 
   ASSERT_EQ(decrypted.size(), testData.size());
-  for (int i = 0; i < testData.size(); ++i) {
+  for (unsigned i = 0; i < testData.size(); ++i) {
     if (testData[i] < 0) {
       ASSERT_NEAR(decrypted[i], -1, 0.05);
     } else if (testData[i] > 0) {
@@ -158,28 +157,28 @@ TEST_F(CkksVectorTest, IsEqual) {
   auto result = precise_vector.IsEqual(1);
   auto decrypted = result.decrypt();
   ASSERT_EQ(decrypted.size(), testDomain.size());
-  for (int i = 0; i < testDomain.size(); ++i) {
+  for (unsigned i = 0; i < testDomain.size(); ++i) {
     ASSERT_NEAR(decrypted[i], testDomain[i] == 1, epsilon) << "Index: " << i;
   }
 
   result = precise_vector.IsEqual(4);
   decrypted = result.decrypt();
   ASSERT_EQ(decrypted.size(), testDomain.size());
-  for (int i = 0; i < testDomain.size(); ++i) {
+  for (unsigned i = 0; i < testDomain.size(); ++i) {
     ASSERT_NEAR(decrypted[i], testDomain[i] == 4, epsilon);
   }
 
   result = precise_vector.IsEqual(17);
   decrypted = result.decrypt();
   ASSERT_EQ(decrypted.size(), testDomain.size());
-  for (int i = 0; i < testDomain.size(); ++i) {
+  for (unsigned i = 0; i < testDomain.size(); ++i) {
     ASSERT_NEAR(decrypted[i], testDomain[i] == 17, epsilon);
   }
 
   result = precise_vector.IsEqual(0);
   decrypted = result.decrypt();
   ASSERT_EQ(decrypted.size(), testDomain.size());
-  for (int i = 0; i < testDomain.size(); ++i) {
+  for (unsigned i = 0; i < testDomain.size(); ++i) {
     ASSERT_NEAR(decrypted[i], testDomain[i] == 0, epsilon);
   }
 }
@@ -197,7 +196,7 @@ TEST_F(CkksVectorTest, rotate) {
   auto decrypted = rotated.decrypt();
 
   ASSERT_EQ(decrypted.size(), testData.size());
-  for (int i = 0; i < testData.size(); ++i) {
+  for (unsigned i = 0; i < testData.size(); ++i) {
     ASSERT_NEAR(decrypted[i], testData[(i + 1) % 17], epsilon);
   }
 
@@ -205,19 +204,19 @@ TEST_F(CkksVectorTest, rotate) {
   decrypted = rotated.decrypt();
 
   ASSERT_EQ(decrypted.size(), testData.size());
-  for (int i = 0; i < testData.size(); ++i) {
+  for (unsigned i = 0; i < testData.size(); ++i) {
     ASSERT_NEAR(decrypted[i], testData[(i - 1) % 17], epsilon);
   }
 
   rotated = ckksVector.rotate(8);
   decrypted = rotated.decrypt();
   ASSERT_EQ(decrypted.size(), testData.size());
-  for (int i = 0; i < testData.size() - 8; ++i) {
+  for (unsigned i = 0; i < testData.size() - 8; ++i) {
     ASSERT_NEAR(decrypted[i], testData[(i + 8) % 17], epsilon);
   }
 
   std::vector<double> large_data(ringDim / 2);
-  for (int i = 0; i < ringDim / 2; ++i) {
+  for (unsigned i = 0; i < ringDim / 2; ++i) {
     large_data[i] = i;
   }
   CkksVector large_vec;
@@ -233,7 +232,7 @@ TEST_F(CkksVectorTest, rotate) {
   ASSERT_NEAR(decrypted[9], large_data[1], epsilon);
 
   large_data.clear();
-  for (int i = 0; i < ringDim; ++i) {
+  for (unsigned i = 0; i < ringDim; ++i) {
     large_data.push_back(i);
   }
   large_vec.encrypt(large_data);
@@ -281,7 +280,7 @@ TEST_F(CkksVectorTest, multiply) {
   ASSERT_EQ(vector_3.size(), test_size);
   auto values_3 = vector_3.decrypt();
   ASSERT_EQ(values_3.size(), test_size);
-  for (int i = 0; i < test_size; ++i) {
+  for (unsigned i = 0; i < test_size; ++i) {
     ASSERT_NEAR(values_3[i], 2, epsilon);
   }
 }
@@ -304,7 +303,7 @@ TEST_F(CkksVectorTest, Concat) {
   ASSERT_EQ(vector_1.size(), test_size * 2);
   auto decrypted_values = vector_1.decrypt();
   ASSERT_EQ(decrypted_values.size(), test_size * 2);
-  for (int i = 0; i < test_size; ++i) {
+  for (unsigned i = 0; i < test_size; ++i) {
     ASSERT_NEAR(decrypted_values[i], 1, epsilon);
     ASSERT_NEAR(decrypted_values[i + test_size], 2, epsilon);
   }
@@ -318,12 +317,12 @@ TEST_F(CkksVectorTest, Concat) {
   ASSERT_EQ(vector_3.size(), test_size * 2);
   decrypted_values = vector_3.decrypt();
   ASSERT_EQ(decrypted_values.size(), test_size * 2);
-  for (int i = 0; i < test_size - 1024; ++i) {
+  for (unsigned i = 0; i < test_size - 1024; ++i) {
     ASSERT_NEAR(decrypted_values[i], 1, epsilon);
     ASSERT_NEAR(decrypted_values[i + test_size], 2, epsilon);
   }
 
-  for (int i = test_size - 1024; i < test_size; ++i) {
+  for (unsigned i = test_size - 1024; i < test_size; ++i) {
     ASSERT_NEAR(decrypted_values[i], 0, epsilon);
     ASSERT_NEAR(decrypted_values[i + test_size], 2, epsilon);
   }
