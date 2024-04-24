@@ -50,7 +50,7 @@ write_basic_package_version_file(
     COMPATIBILITY AnyNewerVersion
 )
 
-export( EXPORT ${PROJECT_NAME}Targets
+export( TARGETS ${PROJECT_NAME}
     FILE ${PROJECT_NAME}Targets.cmake
     NAMESPACE ${PROJECT_NAME}::
 )
