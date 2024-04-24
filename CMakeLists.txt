@@ -50,6 +50,11 @@ write_basic_package_version_file(
     COMPATIBILITY AnyNewerVersion
 )
 
+export( EXPORT ${PROJECT_NAME}Targets
+    FILE ${PROJECT_NAME}Targets.cmake
+    NAMESPACE ${PROJECT_NAME}::
+)
+
 install( EXPORT ${PROJECT_NAME}Targets
     FILE ${PROJECT_NAME}Targets.cmake
     NAMESPACE ${PROJECT_NAME}::
