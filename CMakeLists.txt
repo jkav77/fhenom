@@ -10,6 +10,7 @@ set( CMAKE_CXX_FLAGS ${OpenFHE_CXX_FLAGS} )
 set( CMAKE_BINARY_DIR "build" )
 set( CMAKE_SOURCE_DIR "src" )
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_HOME_DIRECTORY}/bin )
+set( FETCHCONTENT_BASE_DIR ${CMAKE_HOME_DIRECTORY}/_deps )
 
 
 include_directories( include )

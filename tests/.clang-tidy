@@ -1,2 +1,9 @@
-Checks: "-cppcoreguidelines-non-private-member-variables-in-classes"
+Checks: >
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cert-err58-cpp,
+  -readability-function-cognitive-complexity,
+  -modernize-type-traits
 InheritParentConfig: true
