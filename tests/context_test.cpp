@@ -1,11 +1,11 @@
 #include <binfhecontext.h>
+#include <fhenom/context.h>
 #include <openfhe.h>
+#include <spdlog/spdlog.h>
 
 #include <filesystem>
 
 #include "gtest/gtest.h"
-#include "fhenom/context.h"
-#include <spdlog/spdlog.h>
 
 using fhenom::Context;
 

@@ -1,25 +1,11 @@
-cmake_minimum_required (VERSION 3.28 )
+cmake_minimum_required (VERSION 3.22 )
 
-project(FHEnom CXX)
+project(fhenom VERSION 0.1 LANGUAGES CXX DESCRIPTION "Tasty FHE neural network library.")
 set(CMAKE_CXX_STANDARD 20)
-option( BUILD_STATIC "Set to ON to include static versions of the library" OFF)
 
-find_package( spdlog CONFIG REQUIRED )
+find_package( spdlog 1.9.2 CONFIG REQUIRED )
 
-find_package( OpenFHE CONFIG HINTS ${OPENFHE_INSTALL_DIR} REQUIRED )
-if (OpenFHE_FOUND)
-    message(STATUS "FOUND PACKAGE OpenFHE")
-    message(STATUS "OpenFHE Version: ${BASE_OPENFHE_VERSION}")
-    message(STATUS "OpenFHE installed as shared libraries: ${OpenFHE_SHARED}")
-    message(STATUS "OpenFHE include files location: ${OpenFHE_INCLUDE}")
-    message(STATUS "OpenFHE lib files location: ${OpenFHE_LIBDIR}")
-    message(STATUS "OpenFHE Native Backend size: ${OpenFHE_NATIVE_SIZE}")
-    message(STATUS "WITH_INTEL_HEXL:     ${OpenFHE_WITH_INTEL_HEXL}")
-    message(STATUS "INTEL_HEXL_HINT_DIR: ${OpenFHE_INTEL_HEXL_HINT_DIR}")
-else()
-    message(FATAL_ERROR "PACKAGE OpenFHE NOT FOUND")
-endif ()
-
+find_package( OpenFHE 1.1.4 CONFIG REQUIRED )
 set( CMAKE_CXX_FLAGS ${OpenFHE_CXX_FLAGS} )
 set( CMAKE_BINARY_DIR "build" )
 set( CMAKE_SOURCE_DIR "src" )
@@ -34,48 +20,51 @@ include_directories( SYSTEM ${OpenFHE_INCLUDE}/core )
 include_directories( SYSTEM ${OpenFHE_INCLUDE}/core/include )
 include_directories( SYSTEM ${OpenFHE_INCLUDE}/pke )
 include_directories( SYSTEM ${OpenFHE_INCLUDE}/binfhe )
-include_directories( SYSTEM /opt/homebrew/include )
-
-if (OpenFHE_WITH_INTEL_HEXL)
-    find_package(HEXL 1.2.5 HINTS ${OpenFHE_INTEL_HEXL_HINT_DIR} REQUIRED)
-    if (NOT TARGET HEXL::hexl)
-        message(FATAL_ERROR, "Intel HEXL not found")
-    endif()
-
-    get_target_property(INTEL_HEXL_LOCATION HEXL::hexl LOCATION)
-    message(STATUS "INTEL_HEXL_LOCATION: ${INTEL_HEXL_LOCATION}")
-
-    get_target_property(INTEL_HEXL_INCLUDE_DIR HEXL::hexl INTERFACE_INCLUDE_DIRECTORIES)
-    message(STATUS "INTEL_HEXL_INCLUDE_DIR: ${INTEL_HEXL_INCLUDE_DIR}")
-
-    include_directories(${INTEL_HEXL_INCLUDE_DIR})
-endif()
-
-### add directories for other OpenFHE modules as needed for your project
-
-link_directories( ${OpenFHE_LIBDIR} )
-link_directories( ${OPENMP_LIBRARIES} )
-if(BUILD_STATIC)
-    set( CMAKE_EXE_LINKER_FLAGS "${OpenFHE_EXE_LINKER_FLAGS} -static")
-    link_libraries( ${OpenFHE_STATIC_LIBRARIES} )
-else()
-    set( CMAKE_EXE_LINKER_FLAGS ${OpenFHE_EXE_LINKER_FLAGS} )
-    link_libraries( ${OpenFHE_SHARED_LIBRARIES} )
-endif()
 
 set( fhenom_src src/ckks_tensor.cpp src/ckks_vector.cpp src/context.cpp src/tensor.cpp )
-set( fhenom_headers include/fhenom/ckks_tensor.hpp include/fhenom/ckks_vector.hpp include/fhenom/context.hpp include/fhenom/tensor.hpp )
+set( fhenom_headers include/fhenom/ckks_tensor.h include/fhenom/ckks_vector.h include/fhenom/context.h include/fhenom/tensor.h include/fhenom/common.h )
 
-add_library( fhenom SHARED ${fhenom_src} )
-add_library( fhenom::fhenom ALIAS fhenom )
+add_library( ${PROJECT_NAME} SHARED ${fhenom_src} )
+add_library( ${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME} )
 
-set_target_properties( fhenom PROPERTIES PUBLIC_HEADER "${fhenom_headers}" )
+set_target_properties( ${PROJECT_NAME} PROPERTIES PUBLIC_HEADER "${fhenom_headers}" )
 
-target_include_directories( fhenom PUBLIC
+target_include_directories( ${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
     $<INSTALL_INTERFACE:include/fhenom>
 )
-target_include_directories( fhenom PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include )
+target_include_directories( ${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include )
+target_link_libraries( ${PROJECT_NAME} PRIVATE OPENFHEcore OPENFHEpke -fopenmp spdlog::spdlog )
 
-add_subdirectory( tests )
+install(TARGETS ${PROJECT_NAME}
+    EXPORT ${PROJECT_NAME}Targets
+    LIBRARY DESTINATION lib
+    PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
+)
+
+include( CMakePackageConfigHelpers )
+write_basic_package_version_file(
+    ${PROJECT_NAME}ConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+install( EXPORT ${PROJECT_NAME}Targets
+    FILE ${PROJECT_NAME}Targets.cmake
+    NAMESPACE ${PROJECT_NAME}::
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+configure_file( ${PROJECT_NAME}Config.cmake 
+    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake" 
+COPYONLY )
+
+install( 
+    FILES ${PROJECT_NAME}Config.cmake ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+include( CTest )
+enable_testing()
+add_subdirectory( tests EXCLUDE_FROM_ALL )

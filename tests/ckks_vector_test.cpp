@@ -1,15 +1,17 @@
+#include <fhenom/ckks_vector.h>
+#include <spdlog/spdlog.h>
+
 #include <filesystem>
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "fhenom/ckks_vector.h"
-#include <spdlog/spdlog.h>
 
 using fhenom::CkksVector;
 
 class CkksVectorTest : public ::testing::Test {
  protected:
-  const std::vector<double> testData{0, 1, -1, 16, -16, 5, -100, 50, 100, 2, 10, 1, 2, 3, 4, 5, 17};
+  const std::vector<double> testData{0, 1,  -1, 16, -16, 5, -100, 50, 100,
+                                     2, 10, 1,  2,  3,   4, 5,    17};
   const std::vector<double> testDomain{0, 1, 2, 4, 8, 16, 32, 64, 96, 100};
   const std::filesystem::path testDataDir{"testData/ckks_vector"};
 
@@ -40,7 +42,8 @@ class CkksVectorTest : public ::testing::Test {
       ckksVector.load(testDataDir / "data.txt");
 
       precise_context.load(testDataDir / "precise");
-      precise_context.loadRotationKeys(testDataDir / "precise" / "key-rotate.txt");
+      precise_context.loadRotationKeys(testDataDir / "precise" /
+                                       "key-rotate.txt");
       precise_context.loadPublicKey(testDataDir / "precise" / "key-public.txt");
       precise_context.loadSecretKey(testDataDir / "precise" / "key-secret.txt");
       precise_vector.setContext(precise_context);
@@ -89,7 +92,8 @@ class CkksVectorTest : public ::testing::Test {
 
       std::filesystem::create_directories(testDataDir / "precise");
       precise_context.save(testDataDir / "precise");
-      precise_context.saveRotationKeys(testDataDir / "precise" / "key-rotate.txt");
+      precise_context.saveRotationKeys(testDataDir / "precise" /
+                                       "key-rotate.txt");
       precise_context.savePublicKey(testDataDir / "precise" / "key-public.txt");
       precise_context.saveSecretKey(testDataDir / "precise" / "key-secret.txt");
 
@@ -184,7 +188,8 @@ TEST_F(CkksVectorTest, Sum) {
   auto result = precise_vector.Sum();
   auto decrypted = result.decrypt();
   ASSERT_EQ(decrypted.size(), 1);
-  ASSERT_NEAR(decrypted[0], std::reduce(testData.begin(), testData.end()), epsilon);
+  ASSERT_NEAR(decrypted[0], std::reduce(testData.begin(), testData.end()),
+              epsilon);
 }
 
 TEST_F(CkksVectorTest, rotate) {
@@ -237,20 +242,24 @@ TEST_F(CkksVectorTest, rotate) {
   ASSERT_EQ(decrypted.size(), large_data.size());
   for (int i = 0; i < 8; ++i) {
     ASSERT_NEAR(decrypted[i], large_data[i + 8], epsilon);
-    ASSERT_NEAR(decrypted[ringDim / 2 + i], large_data[ringDim / 2 + i + 8], epsilon);
+    ASSERT_NEAR(decrypted[ringDim / 2 + i], large_data[ringDim / 2 + i + 8],
+                epsilon);
   }
 }
 
 TEST_F(CkksVectorTest, fastRotate) {
   auto cryptoContext = ckksVector.getContext().getCryptoContext();
 
-  auto keyMap = cryptoContext->GetEvalAutomorphismKeyMap(ckksVector.getData()[0]->GetKeyTag());
+  auto keyMap = cryptoContext->GetEvalAutomorphismKeyMap(
+      ckksVector.getData()[0]->GetKeyTag());
   for (const auto &rot_idx : {-1, 1, 8, -8}) {
-    auto am_idx = lbcrypto::FindAutomorphismIndex2n(rot_idx, cryptoContext->GetCyclotomicOrder());
+    auto am_idx = lbcrypto::FindAutomorphismIndex2n(
+        rot_idx, cryptoContext->GetCyclotomicOrder());
     ASSERT_EQ(keyMap.count(am_idx), 1);
   }
 
-  auto idx = lbcrypto::FindAutomorphismIndex2n(7, cryptoContext->GetCyclotomicOrder());
+  auto idx =
+      lbcrypto::FindAutomorphismIndex2n(7, cryptoContext->GetCyclotomicOrder());
   ASSERT_EQ(keyMap.count(idx), 0);
 }
 

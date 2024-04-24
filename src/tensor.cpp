@@ -1,7 +1,7 @@
+#include <fhenom/tensor.h>
+
 #include <utility>
 #include <vector>
-
-#include "fhenom/tensor.h"
 
 using fhenom::shape_t;
 using fhenom::Tensor;

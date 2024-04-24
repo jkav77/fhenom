@@ -1,9 +1,9 @@
 #pragma once
 
-#include "fhenom/ckks_vector.h"
-#include "fhenom/common.h"
-#include "fhenom/context.h"
-#include "fhenom/tensor.h"
+#include <fhenom/ckks_vector.h>
+#include <fhenom/common.h>
+#include <fhenom/context.h>
+#include <fhenom/tensor.h>
 
 namespace fhenom {
 
@@ -38,8 +38,8 @@ class CkksTensor {
    * @param kernel The kernel to be applied to the CkksTensor
    * @return std::vector<fhenom::Tensor>
    */
-  std::vector<std::vector<double>> createMaskedConvVectors(const Tensor &kernel,
-                                                           size_t filter_number) const;
+  std::vector<std::vector<double>> createMaskedConvVectors(
+      const Tensor &kernel, size_t filter_number) const;
 
   /**
    * @brief Mask the provided vector with 0s on the left `numCols` elements of

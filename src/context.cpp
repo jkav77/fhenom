@@ -1,9 +1,8 @@
+#include <fhenom/context.h>
 #include <openfhe.h>
+#include <spdlog/spdlog.h>
 
 #include <filesystem>
-
-#include "fhenom/context.h"
-#include <spdlog/spdlog.h>
 
 // header files needed for serialization
 #include <ciphertext-ser.h>

@@ -1,6 +1,7 @@
+#include <fhenom/ckks_tensor.h>
+#include <fhenom/tensor.h>
+
 #include "gtest/gtest.h"
-#include "fhenom/ckks_tensor.h"
-#include "fhenom/tensor.h"
 
 using fhenom::CkksTensor;
 using fhenom::CkksVector;
@@ -14,17 +15,20 @@ class CkksTensorTest : public ::testing::Test {
   CkksVector ckksVector;
   CkksTensor ckksTensor;
   std::filesystem::path testDataDir{"testData/ckks_tensor"};
-  Tensor kernel{{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+  Tensor kernel{{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
                 {3, 3, 3, 1}};
-  Tensor kernel2{{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                  2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
+  Tensor kernel2{{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                  2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
                  {3, 3, 3, 2}};
 
   // Data for a 5x5x3 tensor representing a 3-channel 5x5 image
-  std::vector<double> testData{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  std::vector<double> testData{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   double epsilon = 0.01;
 
   CkksTensorTest() {
@@ -47,8 +51,8 @@ class CkksTensorTest : public ::testing::Test {
 
     ckksVector.setContext(context);
     ckksVector.encrypt(testData);
-    spdlog::debug("Creating tensor with {} element vector and shape {} {} {}", ckksVector.size(), 5,
-                  5, 3);
+    spdlog::debug("Creating tensor with {} element vector and shape {} {} {}",
+                  ckksVector.size(), 5, 5, 3);
     ckksTensor = CkksTensor{ckksVector, {5, 5, 3}};
   }
 

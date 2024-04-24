@@ -1,5 +1,0 @@
-if(EXISTS "/Users/dangerginger/code/FHEnom/build/tests/context_test[1]_tests.cmake")
-  include("/Users/dangerginger/code/FHEnom/build/tests/context_test[1]_tests.cmake")
-else()
-  add_test(context_test_NOT_BUILT context_test_NOT_BUILT)
-endif()

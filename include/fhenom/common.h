@@ -1,8 +1,8 @@
 #pragma once
 
-#include <vector>
+#include <openfhe.h>
 
-#include "openfhe.h"
+#include <vector>
 
 namespace fhenom {
 using shape_t = std::vector<size_t>;
