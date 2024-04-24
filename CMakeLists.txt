@@ -70,6 +70,8 @@ install(
     DESTINATION lib/${PROJECT_NAME}
 )
 
-include( CTest )
-enable_testing()
-add_subdirectory( tests EXCLUDE_FROM_ALL )
+if ( PROJECT_IS_TOP_LEVEL )
+    include( CTest )
+    enable_testing()
+    add_subdirectory( tests EXCLUDE_FROM_ALL )
+endif()
