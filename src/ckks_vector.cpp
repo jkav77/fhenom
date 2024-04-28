@@ -16,12 +16,14 @@
 using fhenom::CkksVector;
 using lbcrypto::Ciphertext;
 using lbcrypto::DCRTPoly;
+using std::size_t;
 
 //////////////////////////////////////////////////////////////////////////////
 // Homomorphic Operations
 
-CkksVector CkksVector::SignUsingChebyshev(const double lower_bound, const double upper_bound, uint32_t degree) const {
-    auto crypto_context = context_.getCryptoContext();
+CkksVector CkksVector::GetSignUsingChebyshev(const double lower_bound, const double upper_bound,
+                                             uint32_t degree) const {
+    auto crypto_context = context_.GetCryptoContext();
 
     if (size() == 0) {
         spdlog::warn("Data is empty. Comparing nothing.");
@@ -45,15 +47,15 @@ CkksVector CkksVector::SignUsingChebyshev(const double lower_bound, const double
 CkksVector CkksVector::IsEqual(const double kValue) const {
     auto vec  = *this;
     auto diff = vec - kValue;
-    auto sign = diff.Sign();
+    auto sign = diff.GetSign();
     return 1 - (sign * sign);
 }
 
-CkksVector CkksVector::Sum() const {
-    auto crypto_context = context_.getCryptoContext();
+CkksVector CkksVector::GetSum() const {
+    auto crypto_context = context_.GetCryptoContext();
     auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
     CkksVector result(context_);
-    result.setNumElements(1);
+    result.SetNumElements(1);
     result.data_.push_back(crypto_context->EvalSum(data_[0], batch_size));
     for (unsigned i = 1; i < data_.size(); ++i) {
         result.data_[0] += crypto_context->EvalSum(data_[i], batch_size);
@@ -61,10 +63,10 @@ CkksVector CkksVector::Sum() const {
     return result;
 }
 
-CkksVector CkksVector::rotate(int rows_to_rotate) const {
-    auto crypto_context = context_.getCryptoContext();
+CkksVector CkksVector::Rotate(int rows_to_rotate) const {
+    auto crypto_context = context_.GetCryptoContext();
 
-    if (context_.getCryptoContext() == nullptr) {
+    if (context_.GetCryptoContext() == nullptr) {
         spdlog::error("Crypto context is not set. Cannot rotate.");
         throw std::invalid_argument("Crypto context is not set. Cannot rotate.");
     }
@@ -90,7 +92,7 @@ CkksVector CkksVector::rotate(int rows_to_rotate) const {
 }
 
 CkksVector& CkksVector::operator*=(const std::vector<double>& rhs) {
-    auto crypto_context = context_.getCryptoContext();
+    auto crypto_context = context_.GetCryptoContext();
     auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
     precomputedRotations_.clear();
 
@@ -115,7 +117,7 @@ CkksVector& CkksVector::operator*=(const std::vector<double>& rhs) {
 }
 
 CkksVector& CkksVector::operator*=(const CkksVector& rhs) {
-    auto crypto_context = context_.getCryptoContext();
+    auto crypto_context = context_.GetCryptoContext();
     precomputedRotations_.clear();
 
     if (size() == 0) {
@@ -143,7 +145,7 @@ CkksVector& CkksVector::operator+=(const CkksVector& rhs) {
     precomputedRotations_.clear();
 
     for (unsigned i = 0; i < data_.size(); ++i) {
-        data_[i] = context_.getCryptoContext()->EvalAdd(data_[i], rhs.data_[i]);
+        data_[i] = context_.GetCryptoContext()->EvalAdd(data_[i], rhs.data_[i]);
     }
 
     return *this;
@@ -153,7 +155,7 @@ CkksVector& CkksVector::operator-=(const double& rhs) {
     precomputedRotations_.clear();
 
     for (auto& ctxt : data_) {
-        ctxt = context_.getCryptoContext()->EvalSub(ctxt, rhs);
+        ctxt = context_.GetCryptoContext()->EvalSub(ctxt, rhs);
     }
 
     return *this;
@@ -163,15 +165,15 @@ namespace fhenom {
 CkksVector operator-(const double& lhs, CkksVector rhs) {
     rhs.precomputedRotations_.clear();
     for (auto& ctxt : rhs.data_) {
-        ctxt = rhs.context_.getCryptoContext()->EvalSub(lhs, ctxt);
+        ctxt = rhs.context_.GetCryptoContext()->EvalSub(lhs, ctxt);
     }
 
     return rhs;
 }
 }  // namespace fhenom
 
-void CkksVector::precomputeRotations() {
-    auto crypto_context = context_.getCryptoContext();
+void CkksVector::PrecomputeRotations() {
+    auto crypto_context = context_.GetCryptoContext();
 
     precomputedRotations_.clear();
     for (auto& ctxt : data_) {
@@ -183,7 +185,7 @@ void CkksVector::precomputeRotations() {
 // Modifiers
 
 void CkksVector::Concat(const CkksVector& rhs) {
-    auto crypto_context = context_.getCryptoContext();
+    auto crypto_context = context_.GetCryptoContext();
     auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
 
     numElements_ = data_.size() * batch_size + rhs.size();
@@ -202,7 +204,7 @@ void CkksVector::Concat(const CkksVector& rhs) {
 //////////////////////////////////////////////////////////////////////////////
 // Encryption and Decryption
 
-void CkksVector::encrypt(const std::vector<double>& data) {
+void CkksVector::Encrypt(const std::vector<double>& data) {
     precomputedRotations_.clear();
 
     if (data.empty()) {
@@ -210,36 +212,36 @@ void CkksVector::encrypt(const std::vector<double>& data) {
         throw std::invalid_argument("Data is empty. Cannot encrypt.");
     }
 
-    if (context_.getCryptoContext() == nullptr) {
+    if (context_.GetCryptoContext() == nullptr) {
         spdlog::error("Crypto context is not set. Cannot encrypt.");
         throw std::invalid_argument("Crypto context is not set. Cannot encrypt.");
     }
 
-    if (context_.getKeyPair().publicKey == nullptr) {
+    if (context_.GetKeyPair().publicKey == nullptr) {
         spdlog::error("Public key is not set. Cannot encrypt.");
         throw std::invalid_argument("Public key is not set. Cannot encrypt.");
     }
 
     this->data_.clear();
 
-    for (size_t i = 0; i < data.size(); i += context_.getCryptoContext()->GetEncodingParams()->GetBatchSize()) {
-        auto end         = std::min(i + context_.getCryptoContext()->GetEncodingParams()->GetBatchSize(), data.size());
+    for (size_t i = 0; i < data.size(); i += context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize()) {
+        auto end         = std::min(i + context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize(), data.size());
         const auto k_tmp = std::vector<double>(data.begin() + i, data.begin() + end);
-        auto ptxt        = context_.getCryptoContext()->MakeCKKSPackedPlaintext(k_tmp);
-        auto ctxt        = context_.getCryptoContext()->Encrypt(context_.getKeyPair().publicKey, ptxt);
+        auto ptxt        = context_.GetCryptoContext()->MakeCKKSPackedPlaintext(k_tmp);
+        auto ctxt        = context_.GetCryptoContext()->Encrypt(context_.GetKeyPair().publicKey, ptxt);
         this->data_.push_back(ctxt);
     }
 
     numElements_ = data.size();
 }
 
-std::vector<double> CkksVector::decrypt() const {
-    if (context_.getCryptoContext() == nullptr) {
+std::vector<double> CkksVector::Decrypt() const {
+    if (context_.GetCryptoContext() == nullptr) {
         spdlog::error("Crypto context is not set. Cannot decrypt.");
         throw std::invalid_argument("Crypto context is not set. Cannot decrypt.");
     }
 
-    if (context_.getKeyPair().secretKey == nullptr) {
+    if (context_.GetKeyPair().secretKey == nullptr) {
         spdlog::error("Secret key is not set. Cannot decrypt.");
         throw std::invalid_argument("Secret key is not set. Cannot decrypt.");
     }
@@ -252,10 +254,10 @@ std::vector<double> CkksVector::decrypt() const {
     std::vector<double> result;
     for (const auto& ctxt : data_) {
         Ptxt ptxt;
-        context_.getCryptoContext()->Decrypt(context_.getKeyPair().secretKey, ctxt, &ptxt);
+        context_.GetCryptoContext()->Decrypt(context_.GetKeyPair().secretKey, ctxt, &ptxt);
 
         auto remaining = numElements_ - result.size();
-        if (remaining < context_.getCryptoContext()->GetEncodingParams()->GetBatchSize()) {
+        if (remaining < context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize()) {
             ptxt->SetLength(remaining);
         }
 
@@ -276,7 +278,7 @@ void CkksVector::serialize(Archive& archive) {
     spdlog::debug("Data size: {}", data_.size());
 }
 
-void CkksVector::load(const std::filesystem::path& path) {
+void CkksVector::Load(const std::filesystem::path& path) {
     std::ifstream if_stream{path};
     if (!if_stream.is_open()) {
         spdlog::error("Could not open file {}", path.string());
@@ -287,7 +289,7 @@ void CkksVector::load(const std::filesystem::path& path) {
     iarchive(*this);
 }
 
-void CkksVector::save(const std::filesystem::path& path) const {
+void CkksVector::Save(const std::filesystem::path& path) const {
     std::ofstream os{path};
     cereal::BinaryOutputArchive oarchive{os};
     oarchive(*this);

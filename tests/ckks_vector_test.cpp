@@ -32,19 +32,19 @@ protected:
         fhenom::Context precise_context;
 
         if (std::filesystem::exists(test_data_dir_)) {
-            context.load("testData/ckks_vector");
-            context.loadRotationKeys(test_data_dir_ / "key-rotate.txt");
-            context.loadPublicKey("testData/ckks_vector/key-public.txt");
-            context.loadSecretKey("testData/ckks_vector/key-secret.txt");
-            ckks_vector_.setContext(context);
-            ckks_vector_.load(test_data_dir_ / "data.txt");
+            context.Load("testData/ckks_vector");
+            context.LoadRotationKeys(test_data_dir_ / "key-rotate.txt");
+            context.LoadPublicKey("testData/ckks_vector/key-public.txt");
+            context.LoadSecretKey("testData/ckks_vector/key-secret.txt");
+            ckks_vector_.SetContext(context);
+            ckks_vector_.Load(test_data_dir_ / "data.txt");
 
-            precise_context.load(test_data_dir_ / "precise");
-            precise_context.loadRotationKeys(test_data_dir_ / "precise" / "key-rotate.txt");
-            precise_context.loadPublicKey(test_data_dir_ / "precise" / "key-public.txt");
-            precise_context.loadSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
-            precise_vector_.setContext(precise_context);
-            precise_vector_.load(test_data_dir_ / "precise" / "data.txt");
+            precise_context.Load(test_data_dir_ / "precise");
+            precise_context.LoadRotationKeys(test_data_dir_ / "precise" / "key-rotate.txt");
+            precise_context.LoadPublicKey(test_data_dir_ / "precise" / "key-public.txt");
+            precise_context.LoadSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
+            precise_vector_.SetContext(precise_context);
+            precise_vector_.Load(test_data_dir_ / "precise" / "data.txt");
         }
         else {
             lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ckks_parameters;
@@ -60,8 +60,8 @@ protected:
             ckks_parameters.SetNumLargeDigits(2);
             context = fhenom::Context{ckks_parameters};
 
-            context.generateKeys();
-            context.generateRotateKeys({-1, 1, 8, -8});
+            context.GenerateKeys();
+            context.GenerateRotateKeys({-1, 1, 8, -8});
 
             lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> precise_params;
             precise_params.SetMultiplicativeDepth(24);
@@ -74,29 +74,29 @@ protected:
             precise_params.SetNumLargeDigits(3);
             precise_context = fhenom::Context{precise_params};
 
-            precise_context.generateKeys();
-            precise_context.generateSumKey();
-            precise_context.generateRotateKeys({-1, 1, 8, -8});
+            precise_context.GenerateKeys();
+            precise_context.GenerateSumKey();
+            precise_context.GenerateRotateKeys({-1, 1, 8, -8});
 
             std::filesystem::create_directories(test_data_dir_);
-            context.save(test_data_dir_);
-            context.saveRotationKeys(test_data_dir_ / "key-rotate.txt");
-            context.savePublicKey(test_data_dir_ / "key-public.txt");
-            context.saveSecretKey(test_data_dir_ / "key-secret.txt");
+            context.Save(test_data_dir_);
+            context.SaveRotationKeys(test_data_dir_ / "key-rotate.txt");
+            context.SavePublicKey(test_data_dir_ / "key-public.txt");
+            context.SaveSecretKey(test_data_dir_ / "key-secret.txt");
 
-            ckks_vector_.setContext(context);
-            ckks_vector_.encrypt(test_data_);
-            ckks_vector_.save(test_data_dir_ / "data.txt");
+            ckks_vector_.SetContext(context);
+            ckks_vector_.Encrypt(test_data_);
+            ckks_vector_.Save(test_data_dir_ / "data.txt");
 
             std::filesystem::create_directories(test_data_dir_ / "precise");
-            precise_context.save(test_data_dir_ / "precise");
-            precise_context.saveRotationKeys(test_data_dir_ / "precise" / "key-rotate.txt");
-            precise_context.savePublicKey(test_data_dir_ / "precise" / "key-public.txt");
-            precise_context.saveSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
+            precise_context.Save(test_data_dir_ / "precise");
+            precise_context.SaveRotationKeys(test_data_dir_ / "precise" / "key-rotate.txt");
+            precise_context.SavePublicKey(test_data_dir_ / "precise" / "key-public.txt");
+            precise_context.SaveSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
 
-            precise_vector_.setContext(precise_context);
-            precise_vector_.encrypt(test_data_);
-            precise_vector_.save(test_data_dir_ / "precise" / "data.txt");
+            precise_vector_.SetContext(precise_context);
+            precise_vector_.Encrypt(test_data_);
+            precise_vector_.Save(test_data_dir_ / "precise" / "data.txt");
         }
     }
 };
@@ -106,23 +106,23 @@ protected:
 
 TEST_F(CkksVectorTest, encrypt) {
     CkksVector col1{};
-    col1.setContext(ckks_vector_.getContext());
-    col1.encrypt(test_data_);
+    col1.SetContext(ckks_vector_.GetContext());
+    col1.Encrypt(test_data_);
 
     ASSERT_GT(ckks_vector_.size(), 0);
-    ASSERT_GT(ckks_vector_.getData().size(), 0);
+    ASSERT_GT(ckks_vector_.GetData().size(), 0);
 
     std::vector<double> large_data(48842, 1);
     CkksVector col2{};
-    col2.setContext(ckks_vector_.getContext());
-    col2.encrypt(large_data);
+    col2.SetContext(ckks_vector_.GetContext());
+    col2.Encrypt(large_data);
     ASSERT_EQ(col2.size(), 48842);
-    ASSERT_EQ(col2.getData().size(), ceil(48842.0 / (static_cast<double>(ringDim_) / 2)));
+    ASSERT_EQ(col2.GetData().size(), ceil(48842.0 / (static_cast<double>(ringDim_) / 2)));
 }
 
 TEST_F(CkksVectorTest, decrypt) {
-    ckks_vector_.load(test_data_dir_ / "data.txt");
-    auto decrypted = ckks_vector_.decrypt();
+    ckks_vector_.Load(test_data_dir_ / "data.txt");
+    auto decrypted = ckks_vector_.Decrypt();
 
     ASSERT_EQ(decrypted.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size(); ++i) {
@@ -133,9 +133,9 @@ TEST_F(CkksVectorTest, decrypt) {
 //////////////////////////////////////////////////////////////////////////////
 // Homomorphic Operations
 
-TEST_F(CkksVectorTest, Sign) {
-    auto result    = precise_vector_.Sign();
-    auto decrypted = result.decrypt();
+TEST_F(CkksVectorTest, GetSign) {
+    auto result    = precise_vector_.GetSign();
+    auto decrypted = result.Decrypt();
 
     ASSERT_EQ(decrypted.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size(); ++i) {
@@ -153,62 +153,68 @@ TEST_F(CkksVectorTest, Sign) {
 
 TEST_F(CkksVectorTest, IsEqual) {
     auto epsilon = 0.05;
-    precise_vector_.encrypt(testDomain_);
+    precise_vector_.Encrypt(testDomain_);
     auto result    = precise_vector_.IsEqual(1);
-    auto decrypted = result.decrypt();
+    auto decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), testDomain_.size());
     for (unsigned i = 0; i < testDomain_.size(); ++i) {
         ASSERT_NEAR(decrypted[i], testDomain_[i] == 1, epsilon) << "Index: " << i;
     }
 
     result    = precise_vector_.IsEqual(4);
-    decrypted = result.decrypt();
+    decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), testDomain_.size());
     for (unsigned i = 0; i < testDomain_.size(); ++i) {
         ASSERT_NEAR(decrypted[i], testDomain_[i] == 4, epsilon);
     }
 
     result    = precise_vector_.IsEqual(17);
-    decrypted = result.decrypt();
+    decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), testDomain_.size());
     for (unsigned i = 0; i < testDomain_.size(); ++i) {
         ASSERT_NEAR(decrypted[i], testDomain_[i] == 17, epsilon);
     }
 
     result    = precise_vector_.IsEqual(0);
-    decrypted = result.decrypt();
+    decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), testDomain_.size());
     for (unsigned i = 0; i < testDomain_.size(); ++i) {
         ASSERT_NEAR(decrypted[i], testDomain_[i] == 0, epsilon);
     }
 }
 
-TEST_F(CkksVectorTest, Sum) {
-    auto result    = precise_vector_.Sum();
-    auto decrypted = result.decrypt();
+TEST_F(CkksVectorTest, GetSum) {
+    auto result    = precise_vector_.GetSum();
+    auto decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), 1);
     ASSERT_NEAR(decrypted[0], std::reduce(test_data_.begin(), test_data_.end()), epsilon_);
 }
 
+TEST_F(CkksVectorTest, GetCount) {
+    auto result    = precise_vector_.GetCount(1);
+    auto decrypted = result.Decrypt();
+    ASSERT_EQ(decrypted[0], 2);
+}
+
 TEST_F(CkksVectorTest, rotate) {
-    auto rotated   = ckks_vector_.rotate(1);
-    auto decrypted = rotated.decrypt();
+    auto rotated   = ckks_vector_.Rotate(1);
+    auto decrypted = rotated.Decrypt();
 
     ASSERT_EQ(decrypted.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size(); ++i) {
         ASSERT_NEAR(decrypted[i], test_data_[(i + 1) % 17], epsilon_);
     }
 
-    rotated   = ckks_vector_.rotate(-1);
-    decrypted = rotated.decrypt();
+    rotated   = ckks_vector_.Rotate(-1);
+    decrypted = rotated.Decrypt();
 
     ASSERT_EQ(decrypted.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size(); ++i) {
         ASSERT_NEAR(decrypted[i], test_data_[(i - 1) % 17], epsilon_);
     }
 
-    rotated   = ckks_vector_.rotate(8);
-    decrypted = rotated.decrypt();
+    rotated   = ckks_vector_.Rotate(8);
+    decrypted = rotated.Decrypt();
     ASSERT_EQ(decrypted.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size() - 8; ++i) {
         ASSERT_NEAR(decrypted[i], test_data_[(i + 8) % 17], epsilon_);
@@ -219,10 +225,10 @@ TEST_F(CkksVectorTest, rotate) {
         large_data[i] = i;
     }
     CkksVector large_vec;
-    large_vec.setContext(ckks_vector_.getContext());
-    large_vec.encrypt(large_data);
-    rotated   = large_vec.rotate(-8);
-    decrypted = rotated.decrypt();
+    large_vec.SetContext(ckks_vector_.GetContext());
+    large_vec.Encrypt(large_data);
+    rotated   = large_vec.Rotate(-8);
+    decrypted = rotated.Decrypt();
     ASSERT_EQ(decrypted.size(), large_data.size());
     for (int i = 0; i < 8; ++i) {
         ASSERT_NEAR(decrypted[i], large_data[large_data.size() - 8 + i], epsilon_);
@@ -234,9 +240,9 @@ TEST_F(CkksVectorTest, rotate) {
     for (unsigned i = 0; i < ringDim_; ++i) {
         large_data.push_back(i);
     }
-    large_vec.encrypt(large_data);
-    rotated   = large_vec.rotate(8);
-    decrypted = rotated.decrypt();
+    large_vec.Encrypt(large_data);
+    rotated   = large_vec.Rotate(8);
+    decrypted = rotated.Decrypt();
     ASSERT_EQ(decrypted.size(), large_data.size());
     for (int i = 0; i < 8; ++i) {
         ASSERT_NEAR(decrypted[i], large_data[i + 8], epsilon_);
@@ -245,9 +251,9 @@ TEST_F(CkksVectorTest, rotate) {
 }
 
 TEST_F(CkksVectorTest, fastRotate) {
-    auto crypto_context = ckks_vector_.getContext().getCryptoContext();
+    auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
 
-    auto key_map = crypto_context->GetEvalAutomorphismKeyMap(ckks_vector_.getData()[0]->GetKeyTag());
+    auto key_map = crypto_context->GetEvalAutomorphismKeyMap(ckks_vector_.GetData()[0]->GetKeyTag());
     for (const auto& rot_idx : {-1, 1, 8, -8}) {
         auto am_idx = lbcrypto::FindAutomorphismIndex2n(rot_idx, crypto_context->GetCyclotomicOrder());
         ASSERT_EQ(key_map.count(am_idx), 1);
@@ -258,22 +264,22 @@ TEST_F(CkksVectorTest, fastRotate) {
 }
 
 TEST_F(CkksVectorTest, multiply) {
-    auto crypto_context = ckks_vector_.getContext().getCryptoContext();
+    auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
 
-    CkksVector vector_1(ckks_vector_.getContext());
-    CkksVector vector_2(ckks_vector_.getContext());
+    CkksVector vector_1(ckks_vector_.GetContext());
+    CkksVector vector_2(ckks_vector_.GetContext());
     auto test_size = ringDim_ - 1024;
 
     std::vector<double> values_1(test_size, 1);
-    vector_1.encrypt(values_1);
+    vector_1.Encrypt(values_1);
 
     std::vector<double> values_2(test_size, 2);
-    vector_2.encrypt(values_2);
+    vector_2.Encrypt(values_2);
 
     CkksVector vector_3 = vector_1 * values_2;
 
     ASSERT_EQ(vector_3.size(), test_size);
-    auto values_3 = vector_3.decrypt();
+    auto values_3 = vector_3.Decrypt();
     ASSERT_EQ(values_3.size(), test_size);
     for (unsigned i = 0; i < test_size; ++i) {
         ASSERT_NEAR(values_3[i], 2, epsilon_);
@@ -281,36 +287,36 @@ TEST_F(CkksVectorTest, multiply) {
 }
 
 TEST_F(CkksVectorTest, Concat) {
-    auto crypto_context = ckks_vector_.getContext().getCryptoContext();
+    auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
 
-    CkksVector vector_1(ckks_vector_.getContext());
-    CkksVector vector_2(ckks_vector_.getContext());
+    CkksVector vector_1(ckks_vector_.GetContext());
+    CkksVector vector_2(ckks_vector_.GetContext());
     auto test_size = ringDim_;
 
     std::vector<double> values_1(test_size, 1);
-    vector_1.encrypt(values_1);
+    vector_1.Encrypt(values_1);
 
     std::vector<double> values_2(test_size, 2);
-    vector_2.encrypt(values_2);
+    vector_2.Encrypt(values_2);
 
     vector_1.Concat(vector_2);
 
     ASSERT_EQ(vector_1.size(), test_size * 2);
-    auto decrypted_values = vector_1.decrypt();
+    auto decrypted_values = vector_1.Decrypt();
     ASSERT_EQ(decrypted_values.size(), test_size * 2);
     for (unsigned i = 0; i < test_size; ++i) {
         ASSERT_NEAR(decrypted_values[i], 1, epsilon_);
         ASSERT_NEAR(decrypted_values[i + test_size], 2, epsilon_);
     }
 
-    CkksVector vector_3(ckks_vector_.getContext());
+    CkksVector vector_3(ckks_vector_.GetContext());
     std::vector<double> values_3(values_1.begin(), values_1.end() - 1024);
-    vector_3.encrypt(values_3);
+    vector_3.Encrypt(values_3);
     ASSERT_EQ(vector_3.size(), test_size - 1024);
 
     vector_3.Concat(vector_2);
     ASSERT_EQ(vector_3.size(), test_size * 2);
-    decrypted_values = vector_3.decrypt();
+    decrypted_values = vector_3.Decrypt();
     ASSERT_EQ(decrypted_values.size(), test_size * 2);
     for (unsigned i = 0; i < test_size - 1024; ++i) {
         ASSERT_NEAR(decrypted_values[i], 1, epsilon_);
@@ -326,22 +332,22 @@ TEST_F(CkksVectorTest, Concat) {
 //////////////////////////////////////////////////////////////////////////////
 // File I/O
 
-TEST_F(CkksVectorTest, save) {
-    ckks_vector_.load(test_data_dir_ / "data.txt");
-    ckks_vector_.save(test_data_dir_ / "data_test.txt");
+TEST_F(CkksVectorTest, Save) {
+    ckks_vector_.Load(test_data_dir_ / "data.txt");
+    ckks_vector_.Save(test_data_dir_ / "data_test.txt");
 
     ASSERT_TRUE(std::filesystem::exists(test_data_dir_ / "data_test.txt"));
     ASSERT_GT(std::filesystem::file_size(test_data_dir_ / "data_test.txt"), 0);
 }
 
-TEST_F(CkksVectorTest, load) {
-    ckks_vector_.load(test_data_dir_ / "data.txt");
+TEST_F(CkksVectorTest, Load) {
+    ckks_vector_.Load(test_data_dir_ / "data.txt");
 
-    ASSERT_GT(ckks_vector_.getData().size(), 0);
+    ASSERT_GT(ckks_vector_.GetData().size(), 0);
     ASSERT_EQ(ckks_vector_.size(), test_data_.size());
 
     CkksVector tmp;
-    tmp.load(test_data_dir_ / "data.txt");
-    auto keys = tmp.getData()[0]->GetCryptoContext()->GetAllEvalMultKeys();
+    tmp.Load(test_data_dir_ / "data.txt");
+    auto keys = tmp.GetData()[0]->GetCryptoContext()->GetAllEvalMultKeys();
     ASSERT_GT(keys.size(), 0);
 }

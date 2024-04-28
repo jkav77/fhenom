@@ -18,14 +18,14 @@ namespace fhenom {
 class CkksVector {
 protected:
     std::vector<Ctxt> data_;
-    size_t numElements_;
+    std::size_t numElements_;
     fhenom::Context context_;
     std::vector<PrecomputedRotations> precomputedRotations_;
 
 public:
     CkksVector() : data_{}, numElements_{0} {}
     CkksVector(const fhenom::Context& context) : data_{}, numElements_{0}, context_{context} {}
-    CkksVector(const std::vector<Ctxt>& data, size_t numElements, const fhenom::Context& context)
+    CkksVector(const std::vector<Ctxt>& data, std::size_t numElements, const fhenom::Context& context)
         : data_{data}, numElements_{numElements}, context_{context} {}
 
     ////////////////////////////////////////////////////////////////////////////
@@ -36,14 +36,14 @@ public:
    *
    * @param data The unencrypted data
    */
-    void encrypt(const std::vector<double>& data);
+    void Encrypt(const std::vector<double>& data);
 
     /**
    * @brief Decrypts the data in this vector
    *
    * @return vector<double> Returns the decrypted data vector
    */
-    std::vector<double> decrypt() const;
+    std::vector<double> Decrypt() const;
 
     ////////////////////////////////////////////////////////////////////////////
     // Homomorphic Operations
@@ -54,8 +54,8 @@ public:
    * @return CkksVector A vector with -1 in negative slots, 0 in 0 slots, and 1
    * in positive slots
    */
-    inline CkksVector Sign() const {
-        return SignUsingChebyshev();
+    inline CkksVector GetSign() const {
+        return GetSignUsingChebyshev();
     };
 
     /**
@@ -65,8 +65,8 @@ public:
    * @return CkksVector A vector with -1 in negative slots, 0 in 0 slots, and 1
    * in positive slots
    */
-    CkksVector SignUsingChebyshev(const double lower_bound = -100, const double upper_bound = 100,
-                                  const uint32_t degree = 2031) const;
+    CkksVector GetSignUsingChebyshev(const double lower_bound = -100, const double upper_bound = 100,
+                                     const uint32_t degree = 2031) const;
 
     /**
    * @brief Checks if the data in this vector is equal to a plaintext value
@@ -78,12 +78,14 @@ public:
     CkksVector IsEqual(const double value) const;
 
     /**
-   * @brief Sum all elements in a vector
+   * @brief GetSum all elements in a vector
    *
    * @return CkksVector A vector where slot 1 contains the sum of all values in
    * the vector
    */
-    CkksVector Sum() const;
+    CkksVector GetSum() const;
+
+    CkksVector GetCount(const double value, const unsigned slot = 0) const;
 
     /**
    * @brief Rotates the data in this vector (+ is left, - is right)
@@ -92,10 +94,10 @@ public:
    * @return CkksVector
    *
    * @note The rotations occur within the each ciphertext, length `N/2`. For
-   * N=8192, `rotate(1)` would send index 0 to index 4095, and index 4096 to
+   * N=8192, `Rotate(1)` would send index 0 to index 4095, and index 4096 to
    * index 8191.
    */
-    CkksVector rotate(int r) const;
+    CkksVector Rotate(int r) const;
 
     /**
    * @brief Elementwise multiplication with a plaintext of equal size
@@ -138,7 +140,7 @@ public:
     /**
    * @brief Precompute rotations to use fast rotations
    */
-    void precomputeRotations();
+    void PrecomputeRotations();
 
     //////////////////////////////////////////////////////////////////////////////
     // Modifiers
@@ -172,14 +174,14 @@ public:
    *
    * @param path The path to the file
    */
-    void load(const std::filesystem::path& path);
+    void Load(const std::filesystem::path& path);
 
     /**
    * @brief Saves data to a file
    *
    * @param path The path to the file
    */
-    void save(const std::filesystem::path& path) const;
+    void Save(const std::filesystem::path& path) const;
 
     ////////////////////////////////////////////////////////////////////////////
     // Getters and Setters
@@ -190,7 +192,7 @@ public:
    * @return vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>> The encrypted
    * data
    */
-    inline std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>> getData() const {
+    inline std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>> GetData() const {
         return data_;
     }
 
@@ -199,7 +201,7 @@ public:
    *
    * @param data The encrypted data
    */
-    inline void setData(const std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>& data, size_t numElements) {
+    inline void SetData(const std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>& data, std::size_t numElements) {
         this->data_ = std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(data.begin(), data.end());
     }
 
@@ -208,7 +210,7 @@ public:
    *
    * @param context
    */
-    inline void setContext(const fhenom::Context& context) {
+    inline void SetContext(const fhenom::Context& context) {
         this->context_ = context;
     }
 
@@ -217,20 +219,20 @@ public:
    *
    * @return fhenom::Context
    */
-    inline fhenom::Context getContext() const {
+    inline fhenom::Context GetContext() const {
         return context_;
     }
 
     /**
    * @brief Get the number of elements
    *
-   * @return size_t The number of elements
+   * @return unsigned The number of elements
    */
-    inline size_t size() const {
+    inline std::size_t size() const {
         return numElements_;
     }
 
-    inline void setNumElements(size_t numElements) {
+    inline void SetNumElements(std::size_t numElements) {
         this->numElements_ = numElements;
     }
 };

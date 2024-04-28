@@ -27,7 +27,7 @@ public:
    *
    * @note The kernel must have the same number of dimensions as the CkksTensor
    */
-    fhenom::CkksTensor conv2D(fhenom::Tensor kernel);
+    fhenom::CkksTensor Conv2D(fhenom::Tensor kernel);
 
     //////////////////////////////////////////////////////////////////////////////
     // Convolution Helper Functions
@@ -80,13 +80,13 @@ public:
     //////////////////////////////////////////////////////////////////////////////
     // Getters and Setters
 
-    fhenom::CkksVector getData() const {
+    fhenom::CkksVector GetData() const {
         return data_;
     }
-    fhenom::shape_t getShape() const {
+    fhenom::shape_t GetShape() const {
         return shape_;
     }
 
-    void setData(fhenom::CkksVector data, shape_t shape);
+    void SetData(fhenom::CkksVector data, shape_t shape);
 };
 }  // namespace fhenom

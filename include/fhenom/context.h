@@ -15,36 +15,36 @@ public:
     Context() = default;
     Context(lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ccParams);
     Context(std::filesystem::path savedContextPath) {
-        load(savedContextPath);
+        Load(savedContextPath);
     }
 
     //////////////////////////////////////////////////////////////////////////////
     // Key Generation
 
-    void generateKeys();
-    void generateSumKey();
-    void generateRotateKeys(const std::vector<int>& indices);
+    void GenerateKeys();
+    void GenerateSumKey();
+    void GenerateRotateKeys(const std::vector<int>& indices);
 
     //////////////////////////////////////////////////////////////////////////////
     // Getters and Setters
 
-    const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& getCryptoContext() const {
+    const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& GetCryptoContext() const {
         return cryptoContext;
     }
 
-    void setCryptoContext(const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& context) {
+    void SetCryptoContext(const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& context) {
         cryptoContext = context;
     }
 
-    const lbcrypto::KeyPair<lbcrypto::DCRTPoly>& getKeyPair() const {
+    const lbcrypto::KeyPair<lbcrypto::DCRTPoly>& GetKeyPair() const {
         return keyPair;
     }
 
-    void setKeyPair(const lbcrypto::KeyPair<lbcrypto::DCRTPoly>& keys) {
+    void SetKeyPair(const lbcrypto::KeyPair<lbcrypto::DCRTPoly>& keys) {
         keyPair = keys;
     }
 
-    bool hasRotationIdx(int idx) const;
+    bool HasRotationIdx(int idx) const;
 
     //////////////////////////////////////////////////////////////////////////////
     // File I/O
@@ -56,7 +56,7 @@ public:
    * @note The crypto context and keys are loaded from the following files:
    * cryptocontext.txt, key-eval-mult.txt, key-eval-sum.txt
    */
-    void load(const std::filesystem::path& path);
+    void Load(const std::filesystem::path& path);
 
     /**
    * @brief Save crypto context and evaluation keys to file
@@ -66,19 +66,19 @@ public:
    * @note The crypto context and keys are saved to the following files:
    * cryptocontext.txt, key-eval-mult.txt, key-eval-sum.txt
    */
-    void save(const std::filesystem::path& path) const;
+    void Save(const std::filesystem::path& path) const;
 
-    void loadCryptoContext(const std::filesystem::path& path);
-    void saveCryptoContext(const std::filesystem::path& path) const;
-    void loadEvalMultKeys(const std::filesystem::path& path);
-    void saveEvalMultKeys(const std::filesystem::path& path) const;
-    void loadEvalSumKeys(const std::filesystem::path& path);
-    void saveEvalSumKeys(const std::filesystem::path& path) const;
-    void loadRotationKeys(const std::filesystem::path& path);
-    void saveRotationKeys(const std::filesystem::path& path) const;
-    void loadPublicKey(const std::filesystem::path& path);
-    void savePublicKey(const std::filesystem::path& path) const;
-    void loadSecretKey(const std::filesystem::path& path);
-    void saveSecretKey(const std::filesystem::path& path) const;
+    void LoadCryptoContext(const std::filesystem::path& path);
+    void SaveCryptoContext(const std::filesystem::path& path) const;
+    void LoadEvalMultKeys(const std::filesystem::path& path);
+    void SaveEvalMultKeys(const std::filesystem::path& path) const;
+    void LoadEvalSumKeys(const std::filesystem::path& path);
+    void SaveEvalSumKeys(const std::filesystem::path& path) const;
+    void LoadRotationKeys(const std::filesystem::path& path);
+    void SaveRotationKeys(const std::filesystem::path& path) const;
+    void LoadPublicKey(const std::filesystem::path& path);
+    void SavePublicKey(const std::filesystem::path& path) const;
+    void LoadSecretKey(const std::filesystem::path& path);
+    void SaveSecretKey(const std::filesystem::path& path) const;
 };
 }  // namespace fhenom
