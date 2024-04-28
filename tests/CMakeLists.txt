@@ -13,13 +13,14 @@ add_executable( ckks_tensor_test ckks_tensor_test.cpp ../src/context.cpp ../src/
 add_executable( tensor_test tensor_test.cpp ../src/tensor.cpp )
 add_custom_target( tests DEPENDS context_test ckks_vector_test ckks_tensor_test tensor_test )
 
-target_link_libraries( context_test GTest::gtest_main spdlog::spdlog ${OpenFHE_SHARED_LIBRARIES} )
+target_link_libraries( context_test GTest::gtest_main spdlog::spdlog     ${OpenFHE_SHARED_LIBRARIES} )
 target_link_libraries( ckks_vector_test GTest::gtest_main spdlog::spdlog ${OpenFHE_SHARED_LIBRARIES} )
 target_link_libraries( ckks_tensor_test GTest::gtest_main spdlog::spdlog ${OpenFHE_SHARED_LIBRARIES} )
-target_link_libraries( tensor_test GTest::gtest_main spdlog::spdlog )
+target_link_libraries( tensor_test GTest::gtest_main spdlog::spdlog      ${OpenFHE_SHARED_LIBRARIES} )
 
 include( GoogleTest )
 gtest_discover_tests( context_test WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests )
 gtest_discover_tests( ckks_vector_test WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests )
 gtest_discover_tests( ckks_tensor_test WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests )
 gtest_discover_tests( tensor_test WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests )
+

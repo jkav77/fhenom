@@ -90,10 +90,10 @@ std::vector<std::vector<double>> CreateKernelVectors(const fhenom::Tensor& kerne
     auto kernel_size    = kernel_shape[2] * kernel_shape[3];
     auto num_channels   = kernel_shape[1];
     auto channel_size   = image_shape[2] * image_shape[3];
-    auto num_filters    = kernel_shape[0];
     auto rotation_range = (kernel_size - 1) / 2;
-    auto middle_row     = (num_rows - 1) / 2;
-    auto padding        = (kernel_shape[2] - 1) / 2;
+    // auto middle_row     = (num_rows - 1) / 2;
+    // auto num_filters    = kernel_shape[0];
+    auto padding = (kernel_shape[2] - 1) / 2;
 
     if (kernel_shape.size() != 4) {
         spdlog::debug(
@@ -121,7 +121,7 @@ std::vector<std::vector<double>> CreateKernelVectors(const fhenom::Tensor& kerne
             }
             else if (row >= num_rows - padding) {
                 MaskRows(kernel_vectors[row_idx], channel_size, num_channels, num_cols, num_rows - padding,
-                         row_idx - rotation_range, num_rows = padding);
+                         row_idx - rotation_range, padding);
             }
         }
     }
@@ -130,15 +130,15 @@ std::vector<std::vector<double>> CreateKernelVectors(const fhenom::Tensor& kerne
 }
 
 CkksTensor CkksTensor::Conv2D(Tensor kernel) {
-    auto kernel_shape      = kernel.GetShape();
-    auto kernel_size       = kernel_shape[0] * kernel_shape[1];
-    auto channel_size      = shape_[0] * shape_[1];
-    auto num_channels      = kernel_shape[2];
-    auto num_filters       = kernel_shape[3];
-    int rotation_range     = static_cast<int>((kernel_size - 1) / 2);
-    auto crypto_context    = data_.GetContext().GetCryptoContext();
-    auto channels_per_ctxt = crypto_context->GetEncodingParams()->GetBatchSize() / channel_size;
-    auto num_ctxts         = num_filters / channels_per_ctxt;
+    auto kernel_shape   = kernel.GetShape();
+    auto kernel_size    = kernel_shape[0] * kernel_shape[1];
+    auto num_channels   = kernel_shape[2];
+    auto num_filters    = kernel_shape[3];
+    auto crypto_context = data_.GetContext().GetCryptoContext();
+    // auto channel_size   = shape_[0] * shape_[1];
+    // auto channels_per_ctxt = crypto_context->GetEncodingParams()->GetBatchSize() / channel_size;
+    // auto num_ctxts         = num_filters / channels_per_ctxt;
+    // int rotation_range     = static_cast<int>((kernel_size - 1) / 2);
 
     if (kernel_shape.size() != 4) {
         if (kernel_shape.size() == 3) {

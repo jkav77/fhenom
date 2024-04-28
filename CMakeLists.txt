@@ -7,6 +7,7 @@ find_package( spdlog 1.9.2 CONFIG REQUIRED )
 
 find_package( OpenFHE 1.1.4 CONFIG REQUIRED )
 set( CMAKE_CXX_FLAGS ${OpenFHE_CXX_FLAGS} )
+message(STATUS "OpenFHE CXX flags: ${OpenFHE_CXX_FLAGS}")
 set( CMAKE_BINARY_DIR "build" )
 set( CMAKE_SOURCE_DIR "src" )
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_HOME_DIRECTORY}/bin )
@@ -36,7 +37,7 @@ target_include_directories( ${PROJECT_NAME} PUBLIC
     $<INSTALL_INTERFACE:include/fhenom>
 )
 target_include_directories( ${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include )
-target_link_libraries( ${PROJECT_NAME} PRIVATE OPENFHEcore OPENFHEpke OPENFHEbinfhe -fopenmp spdlog::spdlog )
+target_link_libraries( ${PROJECT_NAME} PRIVATE OPENFHEcore OPENFHEpke OPENFHEbinfhe spdlog::spdlog -fopenmp )
 
 install(TARGETS ${PROJECT_NAME}
     EXPORT ${PROJECT_NAME}Targets
