@@ -63,6 +63,12 @@ CkksVector CkksVector::GetSum() const {
     return result;
 }
 
+CkksVector CkksVector::GetCount(const double value) const {
+    auto is_equal = IsEqual(value);
+    auto sum      = is_equal.GetSum();
+    return sum;
+}
+
 CkksVector CkksVector::Rotate(int rows_to_rotate) const {
     auto crypto_context = context_.GetCryptoContext();
 

@@ -78,14 +78,14 @@ public:
     CkksVector IsEqual(const double value) const;
 
     /**
-   * @brief GetSum all elements in a vector
+   * @brief Sum all elements in a vector
    *
    * @return CkksVector A vector where slot 1 contains the sum of all values in
    * the vector
    */
     CkksVector GetSum() const;
 
-    CkksVector GetCount(const double value, const unsigned slot = 0) const;
+    CkksVector GetCount(const double value) const;
 
     /**
    * @brief Rotates the data in this vector (+ is left, - is right)

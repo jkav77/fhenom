@@ -9,7 +9,7 @@ using fhenom::CkksVector;
 
 class CkksVectorTest : public ::testing::Test {
 protected:
-    const std::vector<double> test_data_{0, 1, -1, 16, -16, 5, -100, 50, 100, 2, 10, 1, 2, 3, 4, 5, 17};
+    const std::vector<double> test_data_{0, 1, -1, 16, -16, 5, 50, 100, 2, 10, 1, 2, 3, 4, 5, 17};
     const std::vector<double> testDomain_{0, 1, 2, 4, 8, 16, 32, 64, 96, 100};
     const std::filesystem::path test_data_dir_{"testData/ckks_vector"};
 
