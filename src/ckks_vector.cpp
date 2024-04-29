@@ -280,8 +280,6 @@ std::vector<double> CkksVector::Decrypt() const {
 template <class Archive>
 void CkksVector::serialize(Archive& archive) {
     archive(numElements_, data_);
-    spdlog::debug("Serializing EncVector with {} elements", numElements_);
-    spdlog::debug("Data size: {}", data_.size());
 }
 
 void CkksVector::Load(const std::filesystem::path& path) {

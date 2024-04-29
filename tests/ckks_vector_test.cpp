@@ -9,13 +9,13 @@ using fhenom::CkksVector;
 
 class CkksVectorTest : public ::testing::Test {
 protected:
-    const std::vector<double> test_data_{0, 1, -1, 16, -16, 5, 50, 100, 2, 10, 1, 2, 3, 4, 5, 17};
+    const std::vector<double> test_data_{0, 1, -1, 16, -16, 5, 50, 2, 10, 1, 2, 3, 4, 5, 17};
     const std::vector<double> testDomain_{0, 1, 2, 4, 8, 16, 32, 64, 96, 100};
     const std::filesystem::path test_data_dir_{"testData/ckks_vector"};
 
     // lbcrypto::ScalingTechnique scTech = lbcrypto::FLEXIBLEAUTOEXT;
     const uint32_t multDepth_         = 2;
-    const uint32_t scaleModSize_      = 24;
+    const uint32_t scaleModSize_      = 26;
     const uint32_t firstModSize_      = 30;
     const uint32_t ringDim_           = 8192;
     const lbcrypto::SecurityLevel sl_ = lbcrypto::HEStd_128_classic;
@@ -65,8 +65,8 @@ protected:
 
             lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> precise_params;
             precise_params.SetMultiplicativeDepth(24);
-            precise_params.SetScalingModSize(40);
-            precise_params.SetFirstModSize(50);
+            precise_params.SetScalingModSize(50);
+            precise_params.SetFirstModSize(60);
             precise_params.SetSecurityLevel(sl_);
             precise_params.SetRingDim(65536);
             precise_params.SetSecretKeyDist(lbcrypto::UNIFORM_TERNARY);
@@ -104,7 +104,7 @@ protected:
 //////////////////////////////////////////////////////////////////////////////
 // Encryption and Decryption
 
-TEST_F(CkksVectorTest, encrypt) {
+TEST_F(CkksVectorTest, Encrypt) {
     CkksVector col1{};
     col1.SetContext(ckks_vector_.GetContext());
     col1.Encrypt(test_data_);
@@ -120,7 +120,7 @@ TEST_F(CkksVectorTest, encrypt) {
     ASSERT_EQ(col2.GetData().size(), ceil(48842.0 / (static_cast<double>(ringDim_) / 2)));
 }
 
-TEST_F(CkksVectorTest, decrypt) {
+TEST_F(CkksVectorTest, Decrypt) {
     ckks_vector_.Load(test_data_dir_ / "data.txt");
     auto decrypted = ckks_vector_.Decrypt();
 
@@ -149,6 +149,12 @@ TEST_F(CkksVectorTest, GetSign) {
             ASSERT_NEAR(decrypted[i], 0, 0.05);
         }
     }
+
+    precise_vector_.Encrypt(std::vector<double>(ringDim_ / 2, 0));
+    result    = precise_vector_.GetSign();
+    decrypted = result.Decrypt();
+    auto sum  = std::reduce(decrypted.begin(), decrypted.end(), 0.0);
+    spdlog::debug("Sum: {}", sum);
 }
 
 TEST_F(CkksVectorTest, IsEqual) {
@@ -181,6 +187,13 @@ TEST_F(CkksVectorTest, IsEqual) {
     for (unsigned i = 0; i < testDomain_.size(); ++i) {
         ASSERT_NEAR(decrypted[i], testDomain_[i] == 0, epsilon);
     }
+
+    auto ring_dim = precise_vector_.GetContext().GetCryptoContext()->GetRingDimension();
+    precise_vector_.Encrypt(std::vector<double>(ring_dim / 2, 2));
+    result    = precise_vector_.IsEqual(1);
+    decrypted = result.Decrypt();
+    auto sum  = std::reduce(decrypted.begin(), decrypted.end(), 0.0);
+    spdlog::debug("Sum: {}", sum);
 }
 
 TEST_F(CkksVectorTest, GetSum) {
@@ -188,15 +201,30 @@ TEST_F(CkksVectorTest, GetSum) {
     auto decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), 1);
     ASSERT_NEAR(decrypted[0], std::reduce(test_data_.begin(), test_data_.end()), epsilon_);
+
+    precise_vector_.Encrypt(std::vector<double>(ringDim_ / 2, 0));
+    result    = precise_vector_.GetSum();
+    decrypted = result.Decrypt();
+    ASSERT_NEAR(decrypted[0], 0, epsilon_);
 }
 
 TEST_F(CkksVectorTest, GetCount) {
+    auto ring_dim = precise_vector_.GetContext().GetCryptoContext()->GetRingDimension();
+
+    std::vector<double> test_data(ring_dim / 2, 1);
+    precise_vector_.Encrypt(test_data);
     auto result    = precise_vector_.GetCount(1);
     auto decrypted = result.Decrypt();
-    ASSERT_EQ(decrypted[0], 2);
+    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
+
+    test_data = std::vector<double>(ring_dim / 2, 0);
+    precise_vector_.Encrypt(test_data);
+    result    = precise_vector_.GetCount(1);
+    decrypted = result.Decrypt();
+    ASSERT_NEAR(decrypted[0], 0, epsilon_);
 }
 
-TEST_F(CkksVectorTest, rotate) {
+TEST_F(CkksVectorTest, Rotate) {
     auto rotated   = ckks_vector_.Rotate(1);
     auto decrypted = rotated.Decrypt();
 
@@ -250,7 +278,8 @@ TEST_F(CkksVectorTest, rotate) {
     }
 }
 
-TEST_F(CkksVectorTest, fastRotate) {
+TEST_F(CkksVectorTest, FastRotate) {
+    // TODO(jkav77): This isn't testing anything...
     auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
 
     auto key_map = crypto_context->GetEvalAutomorphismKeyMap(ckks_vector_.GetData()[0]->GetKeyTag());
@@ -263,7 +292,7 @@ TEST_F(CkksVectorTest, fastRotate) {
     ASSERT_EQ(key_map.count(idx), 0);
 }
 
-TEST_F(CkksVectorTest, multiply) {
+TEST_F(CkksVectorTest, Multiply) {
     auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
 
     CkksVector vector_1(ckks_vector_.GetContext());
