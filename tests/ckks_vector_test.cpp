@@ -12,6 +12,7 @@ protected:
     const std::vector<double> test_data_{0, 1, -1, 16, -16, 5, 50, 2, 10, 1, 2, 3, 4, 5, 17};
     const std::vector<double> testDomain_{0, 1, 2, 4, 8, 16, 32, 64, 96, 100};
     const std::filesystem::path test_data_dir_{"testData/ckks_vector"};
+    const std::vector<int> rotation_indices_{1, 2, 4, 8, -1, -2, -4, -8};
 
     // lbcrypto::ScalingTechnique scTech = lbcrypto::FLEXIBLEAUTOEXT;
     const uint32_t multDepth_         = 2;
@@ -61,7 +62,7 @@ protected:
             context = fhenom::Context{ckks_parameters};
 
             context.GenerateKeys();
-            context.GenerateRotateKeys({-1, 1, 8, -8});
+            context.GenerateRotateKeys(rotation_indices_);
 
             lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> precise_params;
             precise_params.SetMultiplicativeDepth(24);
@@ -76,7 +77,7 @@ protected:
 
             precise_context.GenerateKeys();
             precise_context.GenerateSumKey();
-            precise_context.GenerateRotateKeys({-1, 1, 8, -8});
+            precise_context.GenerateRotateKeys(rotation_indices_);
 
             std::filesystem::create_directories(test_data_dir_);
             context.Save(test_data_dir_);
@@ -211,10 +212,16 @@ TEST_F(CkksVectorTest, GetSum) {
 TEST_F(CkksVectorTest, GetCount) {
     auto ring_dim = precise_vector_.GetContext().GetCryptoContext()->GetRingDimension();
 
+    std::vector<double> large_data(ring_dim * 1.5, 0);
+    precise_vector_.Encrypt(large_data);
+    auto result    = precise_vector_.GetCount(0);
+    auto decrypted = result.Decrypt();
+    ASSERT_NEAR(decrypted[0], ring_dim * 1.5, epsilon_);
+
     std::vector<double> test_data(ring_dim / 2, 1);
     precise_vector_.Encrypt(test_data);
-    auto result    = precise_vector_.GetCount(1);
-    auto decrypted = result.Decrypt();
+    result    = precise_vector_.GetCount(1);
+    decrypted = result.Decrypt();
     ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
 
     test_data = std::vector<double>(ring_dim / 2, 0);
@@ -227,25 +234,37 @@ TEST_F(CkksVectorTest, GetCount) {
 TEST_F(CkksVectorTest, Rotate) {
     auto rotated   = ckks_vector_.Rotate(1);
     auto decrypted = rotated.Decrypt();
-
     ASSERT_EQ(decrypted.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size(); ++i) {
-        ASSERT_NEAR(decrypted[i], test_data_[(i + 1) % 17], epsilon_);
+        ASSERT_NEAR(decrypted[i], test_data_[(i + 1) % test_data_.size()], epsilon_);
+    }
+
+    rotated   = ckks_vector_.Rotate(-3);
+    decrypted = rotated.Decrypt();
+    ASSERT_EQ(decrypted.size(), test_data_.size());
+    for (unsigned i = 0; i < test_data_.size() - 3; ++i) {
+        ASSERT_NEAR(decrypted[i + 3], test_data_[i], epsilon_);
     }
 
     rotated   = ckks_vector_.Rotate(-1);
     decrypted = rotated.Decrypt();
-
     ASSERT_EQ(decrypted.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size(); ++i) {
-        ASSERT_NEAR(decrypted[i], test_data_[(i - 1) % 17], epsilon_);
+        ASSERT_NEAR(decrypted[i], test_data_[(i - 1) % test_data_.size()], epsilon_);
     }
 
     rotated   = ckks_vector_.Rotate(8);
     decrypted = rotated.Decrypt();
     ASSERT_EQ(decrypted.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size() - 8; ++i) {
-        ASSERT_NEAR(decrypted[i], test_data_[(i + 8) % 17], epsilon_);
+        ASSERT_NEAR(decrypted[i], test_data_[(i + 8) % test_data_.size()], epsilon_);
+    }
+
+    rotated   = ckks_vector_.Rotate(3);
+    decrypted = rotated.Decrypt();
+    ASSERT_EQ(decrypted.size(), test_data_.size());
+    for (unsigned i = 0; i < test_data_.size() - 3; ++i) {
+        ASSERT_NEAR(decrypted[i], test_data_[(i + 3) % test_data_.size()], epsilon_);
     }
 
     std::vector<double> large_data(ringDim_ / 2);
@@ -313,6 +332,15 @@ TEST_F(CkksVectorTest, Multiply) {
     for (unsigned i = 0; i < test_size; ++i) {
         ASSERT_NEAR(values_3[i], 2, epsilon_);
     }
+}
+
+TEST_F(CkksVectorTest, Subtract) {
+    auto test_vector = ckks_vector_ - 1;
+    SUCCEED();
+
+    ckks_vector_.Encrypt(std::vector<double>(48842, 2));
+    test_vector = ckks_vector_ - 1;
+    SUCCEED();
 }
 
 TEST_F(CkksVectorTest, Concat) {

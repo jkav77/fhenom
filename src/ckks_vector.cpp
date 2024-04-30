@@ -44,9 +44,9 @@ CkksVector CkksVector::GetSignUsingChebyshev(const double lower_bound, const dou
     return CkksVector{result, numElements_, context_};
 }
 
-CkksVector CkksVector::IsEqual(const double kValue) const {
+CkksVector CkksVector::IsEqual(const double value) const {
     auto vec  = *this;
-    auto diff = vec - kValue;
+    auto diff = vec - value;
     auto sign = diff.GetSign();
     return 1 - (sign * sign);
 }
@@ -69,10 +69,14 @@ CkksVector CkksVector::GetCount(const double value) const {
     return sum;
 }
 
-CkksVector CkksVector::Rotate(int rows_to_rotate) const {
+CkksVector CkksVector::Rotate(int rotation_index) const {
+    if (rotation_index == 0) {
+        return *this;
+    }
+
     auto crypto_context = context_.GetCryptoContext();
 
-    if (context_.GetCryptoContext() == nullptr) {
+    if (crypto_context == nullptr) {
         spdlog::error("Crypto context is not set. Cannot rotate.");
         throw std::invalid_argument("Crypto context is not set. Cannot rotate.");
     }
@@ -82,15 +86,36 @@ CkksVector CkksVector::Rotate(int rows_to_rotate) const {
         throw std::invalid_argument("Data is empty. Cannot rotate.");
     }
 
-    std::vector<Ctxt> result;
+    std::vector<Ctxt> result   = data_;
+    auto precomputed_rotations = precomputedRotations_;
+    auto am_key_map            = crypto_context->GetEvalAutomorphismKeyMap(data_[0]->GetKeyTag());
+    int rotations_remaining    = rotation_index;
 
-    for (unsigned i = 0; i < data_.size(); ++i) {
-        if (precomputedRotations_.empty()) {
-            result.emplace_back(crypto_context->EvalRotate(data_[i], rows_to_rotate));
+    while (rotations_remaining != 0) {
+        auto am_idx = crypto_context->FindAutomorphismIndex(rotations_remaining);
+
+        int next_rotation_amount = 0;
+        if (am_key_map.contains(am_idx)) {
+            next_rotation_amount = rotations_remaining;
         }
         else {
-            result.emplace_back(crypto_context->EvalFastRotation(
-                data_[i], rows_to_rotate, crypto_context->GetCyclotomicOrder(), precomputedRotations_[i]));
+            next_rotation_amount = std::pow(2, std::floor(std::log2(std::abs(rotations_remaining))));
+            if (rotations_remaining < 0) {
+                next_rotation_amount = -next_rotation_amount;
+            }
+        }
+
+        rotations_remaining -= next_rotation_amount;
+
+        for (unsigned i = 0; i < result.size(); ++i) {
+            if (precomputed_rotations.empty()) {
+                result[i] = crypto_context->EvalRotate(result[i], next_rotation_amount);
+            }
+            else {
+                result[i] = crypto_context->EvalFastRotation(
+                    result[i], next_rotation_amount, crypto_context->GetCyclotomicOrder(), precomputed_rotations[i]);
+                precomputed_rotations.clear();
+            }
         }
     }
 

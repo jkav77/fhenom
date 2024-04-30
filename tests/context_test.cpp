@@ -1,4 +1,3 @@
-#include <binfhecontext.h>
 #include <fhenom/context.h>
 #include <openfhe.h>
 #include <spdlog/spdlog.h>

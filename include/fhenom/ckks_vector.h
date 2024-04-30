@@ -90,14 +90,14 @@ public:
     /**
    * @brief Rotates the data in this vector (+ is left, - is right)
    *
-   * @param r
+   * @param rotation_index
    * @return CkksVector
    *
    * @note The rotations occur within the each ciphertext, length `N/2`. For
    * N=8192, `Rotate(1)` would send index 0 to index 4095, and index 4096 to
    * index 8191.
    */
-    CkksVector Rotate(int r) const;
+    CkksVector Rotate(int rotation_index) const;
 
     /**
    * @brief Elementwise multiplication with a plaintext of equal size
