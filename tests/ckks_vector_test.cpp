@@ -386,6 +386,27 @@ TEST_F(CkksVectorTest, Concat) {
     }
 }
 
+TEST_F(CkksVectorTest, Merge) {
+    const size_t num_vectors = 10;
+    std::vector<CkksVector> vectors(num_vectors);
+    auto context = ckks_vector_.GetContext();
+    for (auto i = 0; i < 10; ++i) {
+        vectors[i] = CkksVector(context);
+        vectors[i].Encrypt(test_data_);
+    }
+
+    auto result = CkksVector::Merge(vectors);
+
+    ASSERT_EQ(result.size(), num_vectors);
+
+    auto decrypted = result.Decrypt();
+    ASSERT_EQ(decrypted.size(), num_vectors);
+
+    for (const auto& element : decrypted) {
+        ASSERT_NEAR(element, test_data_[0], epsilon_);
+    }
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // File I/O
 

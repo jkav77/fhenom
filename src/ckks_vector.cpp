@@ -108,13 +108,21 @@ CkksVector CkksVector::Rotate(int rotation_index) const {
         rotations_remaining -= next_rotation_amount;
 
         for (unsigned i = 0; i < result.size(); ++i) {
-            if (precomputed_rotations.empty()) {
-                result[i] = crypto_context->EvalRotate(result[i], next_rotation_amount);
+            try {
+                if (precomputed_rotations.empty()) {
+                    result[i] = crypto_context->EvalRotate(result[i], next_rotation_amount);
+                }
+                else {
+                    result[i] = crypto_context->EvalFastRotation(result[i], next_rotation_amount,
+                                                                 crypto_context->GetCyclotomicOrder(),
+                                                                 precomputed_rotations[i]);
+                    precomputed_rotations.clear();
+                }
             }
-            else {
-                result[i] = crypto_context->EvalFastRotation(
-                    result[i], next_rotation_amount, crypto_context->GetCyclotomicOrder(), precomputed_rotations[i]);
-                precomputed_rotations.clear();
+            catch (const std::exception& e) {
+                spdlog::error("Error rotating ciphertext by {}. No key for rotating {}.", rotation_index,
+                              next_rotation_amount);
+                throw e;
             }
         }
     }
@@ -176,7 +184,7 @@ CkksVector& CkksVector::operator+=(const CkksVector& rhs) {
     precomputedRotations_.clear();
 
     for (unsigned i = 0; i < data_.size(); ++i) {
-        data_[i] = context_.GetCryptoContext()->EvalAdd(data_[i], rhs.data_[i]);
+        context_.GetCryptoContext()->EvalAddInPlace(data_[i], rhs.data_[i]);
     }
 
     return *this;
@@ -230,6 +238,38 @@ void CkksVector::Concat(const CkksVector& rhs) {
         precomputedRotations_.insert(precomputedRotations_.end(), rhs.precomputedRotations_.begin(),
                                      rhs.precomputedRotations_.end());
     }
+}
+
+CkksVector CkksVector::Merge(const std::vector<CkksVector>& vectors) {
+    if (vectors.empty()) {
+        spdlog::error("Cannot merge empty vectors.");
+        throw std::invalid_argument("Cannot merge empty vectors.");
+    }
+
+    auto crypto_context = vectors[0].context_.GetCryptoContext();
+
+    std::vector<double> mask(vectors[0].size(), 0);
+    mask[0]           = 1;
+    CkksVector result = vectors[0] * mask;
+    result.SetNumElements(1);
+
+    for (auto i = 1; i < vectors.size(); ++i) {
+        if (vectors[i].context_.GetCryptoContext() != crypto_context) {
+            spdlog::error("Cannot merge vectors with different contexts.");
+            throw std::invalid_argument("Cannot merge vectors with different contexts.");
+        }
+
+        mask    = std::vector<double>(vectors[i].size(), 0);
+        mask[0] = 1;
+        result  = result.Rotate(-1);
+
+        auto new_size = result.size() + 1;
+        result.SetNumElements(vectors[i].size());
+        result += vectors[i] * mask;
+        result.SetNumElements(new_size);
+    }
+
+    return result;
 }
 
 //////////////////////////////////////////////////////////////////////////////

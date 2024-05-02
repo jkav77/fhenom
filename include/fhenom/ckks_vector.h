@@ -146,14 +146,23 @@ public:
     // Modifiers
 
     /**
-   * @brief Concatenate a vector onto this vector
-   *
-   * @param rhs The vector to concatenate on the end
-   *
-   * @note Unused slots will be preserved and may create a gap in the data. This
-   * method works best when the vector has used all of the slots.
-   */
+     * @brief Concatenate a vector onto this vector
+     *
+     * @param rhs The vector to concatenate on the end
+     *
+     * @note Unused slots will be preserved and may create a gap in the data. This
+     * method works best when the vector has used all of the slots.
+     */
     void Concat(const CkksVector& rhs);
+
+    /**
+     * @brief Create a vector consisting of the first slot of each of the parameter vectors
+     * 
+     * @param vectors A list of vectors to merge
+     * @return CkksVector A vector containing the first slot of each input vector in the slot that
+     * corresponds to the input vector index
+     */
+    static CkksVector Merge(const std::vector<CkksVector>& vectors);
 
     ////////////////////////////////////////////////////////////////////////////
     // File I/O
