@@ -1,6 +1,7 @@
 #include <fhenom/ckks_vector.h>
 #include <gtest/gtest.h>
 #include <spdlog/spdlog.h>
+#include <openfhe.h>
 
 #include <filesystem>
 #include <vector>
@@ -33,6 +34,7 @@ protected:
         fhenom::Context precise_context;
 
         if (std::filesystem::exists(test_data_dir_)) {
+            spdlog::debug("Saved test data found, loading...");
             context.Load("testData/ckks_vector");
             context.LoadRotationKeys(test_data_dir_ / "key-rotate.txt");
             context.LoadPublicKey("testData/ckks_vector/key-public.txt");
@@ -48,6 +50,7 @@ protected:
             precise_vector_.Load(test_data_dir_ / "precise" / "data.txt");
         }
         else {
+            spdlog::debug("No saved test data found, generating new data...");
             lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ckks_parameters;
             ckks_parameters.SetMultiplicativeDepth(multDepth_);
             ckks_parameters.SetScalingModSize(scaleModSize_);
@@ -65,7 +68,7 @@ protected:
             context.GenerateRotateKeys(rotation_indices_);
 
             lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> precise_params;
-            precise_params.SetMultiplicativeDepth(24);
+            precise_params.SetMultiplicativeDepth(23);
             precise_params.SetScalingModSize(50);
             precise_params.SetFirstModSize(60);
             precise_params.SetSecurityLevel(sl_);
@@ -135,90 +138,115 @@ TEST_F(CkksVectorTest, Decrypt) {
 // Homomorphic Operations
 
 TEST_F(CkksVectorTest, GetSign) {
-    auto result    = precise_vector_.GetSign();
-    auto decrypted = result.Decrypt();
+    precise_vector_ *= std::vector<double>(test_data_.size(), 1.0 / 50.0);
+    auto result = precise_vector_.GetSign().Decrypt();
 
-    ASSERT_EQ(decrypted.size(), test_data_.size());
+    ASSERT_EQ(result.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size(); ++i) {
         if (test_data_[i] < 0) {
-            ASSERT_NEAR(decrypted[i], -1, 0.05);
+            ASSERT_NEAR(result[i], -1, 0.05);
         }
         else if (test_data_[i] > 0) {
-            ASSERT_NEAR(decrypted[i], 1, 0.05);
+            ASSERT_NEAR(result[i], 1, 0.05);
         }
         else {
-            ASSERT_NEAR(decrypted[i], 0, 0.05);
+            ASSERT_NEAR(result[i], 0, 0.05);
         }
     }
+}
 
-    precise_vector_.Encrypt(std::vector<double>(ringDim_ / 2, 0));
-    result    = precise_vector_.GetSign();
-    decrypted = result.Decrypt();
-    auto sum  = std::reduce(decrypted.begin(), decrypted.end(), 0.0);
-    spdlog::debug("Sum: {}", sum);
+TEST_F(CkksVectorTest, GetSignUsingPolyComp) {
+    precise_vector_ *= std::vector<double>(15, 1.0 / 100.0);
+    auto decrypted = precise_vector_.Decrypt();
+    auto result    = precise_vector_.GetSignUsingPolyComp().Decrypt();
+
+    ASSERT_EQ(result.size(), test_data_.size());
+
+    for (unsigned i = 0; i < test_data_.size(); ++i) {
+        if (test_data_[i] < 0) {
+            ASSERT_NEAR(result[i], -1, epsilon_);
+        }
+        else if (test_data_[i] > 0) {
+            ASSERT_NEAR(result[i], 1, epsilon_);
+        }
+        else {
+            ASSERT_NEAR(result[i], 0, epsilon_);
+        }
+    }
 }
 
 TEST_F(CkksVectorTest, IsEqual) {
-    auto epsilon = 0.05;
     precise_vector_.Encrypt(testDomain_);
-    auto result    = precise_vector_.IsEqual(1);
+    auto result    = precise_vector_.IsEqual(1, 100);
     auto decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), testDomain_.size());
     for (unsigned i = 0; i < testDomain_.size(); ++i) {
-        ASSERT_NEAR(decrypted[i], testDomain_[i] == 1, epsilon) << "Index: " << i;
+        ASSERT_NEAR(decrypted[i], testDomain_[i] == 1, epsilon_) << "Index: " << i;
     }
 
-    result    = precise_vector_.IsEqual(4);
+    result    = precise_vector_.IsEqual(4, 100);
     decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), testDomain_.size());
     for (unsigned i = 0; i < testDomain_.size(); ++i) {
-        ASSERT_NEAR(decrypted[i], testDomain_[i] == 4, epsilon);
+        ASSERT_NEAR(decrypted[i], testDomain_[i] == 4, epsilon_);
     }
 
-    result    = precise_vector_.IsEqual(17);
+    result    = precise_vector_.IsEqual(17, 100);
     decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), testDomain_.size());
     for (unsigned i = 0; i < testDomain_.size(); ++i) {
-        ASSERT_NEAR(decrypted[i], testDomain_[i] == 17, epsilon);
+        ASSERT_NEAR(decrypted[i], testDomain_[i] == 17, epsilon_);
     }
 
-    result    = precise_vector_.IsEqual(0);
+    result    = precise_vector_.IsEqual(0, 100);
     decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), testDomain_.size());
     for (unsigned i = 0; i < testDomain_.size(); ++i) {
-        ASSERT_NEAR(decrypted[i], testDomain_[i] == 0, epsilon);
+        ASSERT_NEAR(decrypted[i], testDomain_[i] == 0, epsilon_);
     }
-
-    auto ring_dim = precise_vector_.GetContext().GetCryptoContext()->GetRingDimension();
-    precise_vector_.Encrypt(std::vector<double>(ring_dim / 2, 2));
-    result    = precise_vector_.IsEqual(1);
-    decrypted = result.Decrypt();
-    auto sum  = std::reduce(decrypted.begin(), decrypted.end(), 0.0);
-    spdlog::debug("Sum: {}", sum);
 }
 
 TEST_F(CkksVectorTest, GetSum) {
+    auto ring_dim = precise_vector_.GetContext().GetCryptoContext()->GetRingDimension();
+
     auto result    = precise_vector_.GetSum();
     auto decrypted = result.Decrypt();
     ASSERT_EQ(decrypted.size(), 1);
     ASSERT_NEAR(decrypted[0], std::reduce(test_data_.begin(), test_data_.end()), epsilon_);
 
-    precise_vector_.Encrypt(std::vector<double>(ringDim_ / 2, 0));
+    precise_vector_.Encrypt(std::vector<double>(15, 1));
+    result    = precise_vector_.GetSum();
+    decrypted = result.Decrypt();
+    ASSERT_NEAR(decrypted[0], 15, epsilon_);
+
+    precise_vector_.Encrypt(std::vector<double>(ring_dim * 1.5, 0));
     result    = precise_vector_.GetSum();
     decrypted = result.Decrypt();
     ASSERT_NEAR(decrypted[0], 0, epsilon_);
+
+    precise_vector_.Encrypt(std::vector<double>(ring_dim / 2, 1));
+    result    = precise_vector_.GetSum();
+    decrypted = result.Decrypt();
+    ASSERT_NEAR(decrypted[0], ring_dim / 2, epsilon_);
 }
 
 TEST_F(CkksVectorTest, GetCount) {
     auto ring_dim = precise_vector_.GetContext().GetCryptoContext()->GetRingDimension();
 
-    std::vector<double> large_data(ring_dim * 1.5, 0);
-    precise_vector_.Encrypt(large_data);
-    auto result    = precise_vector_.GetCount(0);
-    auto decrypted = result.Decrypt();
-    ASSERT_NEAR(decrypted[0], ring_dim * 1.5, epsilon_);
-
     std::vector<double> test_data(ring_dim / 2, 1);
+    precise_vector_.Encrypt(test_data);
+    auto test = precise_vector_;
+    test.Encrypt(test_data);
+    auto result         = precise_vector_.IsEqual(1, 100);
+    auto decrypted      = result.Decrypt();
+    auto new_result     = result.GetSum();
+    test                = test.GetSum();
+    decrypted           = new_result.Decrypt();
+    auto decrypted_test = test.Decrypt();
+    ASSERT_NEAR(decrypted_test[0], ring_dim / 2.0, epsilon_);
+    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
+
+    test_data = std::vector<double>(ring_dim / 2, 1);
     precise_vector_.Encrypt(test_data);
     result    = precise_vector_.GetCount(1);
     decrypted = result.Decrypt();
@@ -229,6 +257,12 @@ TEST_F(CkksVectorTest, GetCount) {
     result    = precise_vector_.GetCount(1);
     decrypted = result.Decrypt();
     ASSERT_NEAR(decrypted[0], 0, epsilon_);
+
+    std::vector<double> large_data(ring_dim * 1.5, 0);
+    precise_vector_.Encrypt(large_data);
+    result    = precise_vector_.GetCount(0);
+    decrypted = result.Decrypt();
+    ASSERT_NEAR(decrypted[0], ring_dim * 1.5, epsilon_);
 }
 
 TEST_F(CkksVectorTest, Rotate) {

@@ -21,6 +21,26 @@ using std::size_t;
 //////////////////////////////////////////////////////////////////////////////
 // Homomorphic Operations
 
+CkksVector CkksVector::GetSignUsingPolyComp() const {
+    auto crypto_context = context_.GetCryptoContext();
+
+    if (size() == 0) {
+        spdlog::warn("Data is empty. Nothing to compare.");
+        throw std::invalid_argument("Data is empty. Nothing to compare.");
+    }
+
+    std::vector<Ctxt> result(data_.size());
+    for (unsigned i = 0; i < data_.size(); ++i) {
+        result[i] = crypto_context->EvalPoly(data_[i], fhenom::g3_coeffs);
+        result[i] = crypto_context->EvalPoly(result[i], fhenom::g3_coeffs);
+        result[i] = crypto_context->EvalPoly(result[i], fhenom::g3_coeffs);
+        result[i] = crypto_context->EvalPoly(result[i], fhenom::f3_coeffs);
+        result[i] = crypto_context->EvalPoly(result[i], fhenom::f3_coeffs);
+    }
+
+    return CkksVector{result, numElements_, context_};
+}
+
 CkksVector CkksVector::GetSignUsingChebyshev(const double lower_bound, const double upper_bound,
                                              uint32_t degree) const {
     auto crypto_context = context_.GetCryptoContext();
@@ -44,9 +64,9 @@ CkksVector CkksVector::GetSignUsingChebyshev(const double lower_bound, const dou
     return CkksVector{result, numElements_, context_};
 }
 
-CkksVector CkksVector::IsEqual(const double value) const {
-    auto vec  = *this;
-    auto diff = vec - value;
+CkksVector CkksVector::IsEqual(const double value, const double max_value) const {
+    auto diff = *this - value;
+    diff *= std::vector<double>(size(), 1.0 / max_value);
     auto sign = diff.GetSign();
     return 1 - (sign * sign);
 }
@@ -63,8 +83,8 @@ CkksVector CkksVector::GetSum() const {
     return result;
 }
 
-CkksVector CkksVector::GetCount(const double value) const {
-    auto is_equal = IsEqual(value);
+CkksVector CkksVector::GetCount(const double value, const double max_value) const {
+    auto is_equal = IsEqual(value, max_value);
     auto sum      = is_equal.GetSum();
     return sum;
 }
