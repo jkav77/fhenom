@@ -383,6 +383,16 @@ TEST_F(CkksVectorTest, Subtract) {
     SUCCEED();
 }
 
+TEST_F(CkksVectorTest, Addition) {
+    auto test_vector = ckks_vector_ + ckks_vector_;
+    auto result      = test_vector.Decrypt();
+    ASSERT_NEAR(result[0], test_data_[0] * 2, epsilon_);
+
+    test_vector += ckks_vector_;
+    result = test_vector.Decrypt();
+    ASSERT_NEAR(result[0], test_data_[0] * 3, epsilon_);
+}
+
 TEST_F(CkksVectorTest, Concat) {
     auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
 
