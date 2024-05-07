@@ -72,20 +72,37 @@ CkksVector CkksVector::IsEqual(const double value, const double max_value) const
 }
 
 CkksVector CkksVector::GetSum() const {
-    auto crypto_context = context_.GetCryptoContext();
-    auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
-    CkksVector result(context_);
-    result.SetNumElements(1);
-    result.data_.push_back(crypto_context->EvalSum(data_[0], batch_size));
-    for (unsigned i = 1; i < data_.size(); ++i) {
-        result.data_[0] += crypto_context->EvalSum(data_[i], batch_size);
+    if (size() == 0) {
+        spdlog::error("Data is empty. Cannot sum.");
+        throw std::invalid_argument("Data is empty. Cannot sum.");
     }
-    return result;
+
+    auto crypto_context = context_.GetCryptoContext();
+    size_t batch_size   = crypto_context->GetEncodingParams()->GetBatchSize();
+
+    Ctxt result = crypto_context->EvalSum(data_[0], batch_size);
+    for (unsigned i = 1; i < data_.size(); ++i) {
+        result += crypto_context->EvalSum(data_[i], batch_size);
+    }
+
+    return CkksVector(std::vector<Ctxt>{result}, 1, context_);
 }
 
 CkksVector CkksVector::GetCount(const double value, const double max_value) const {
     auto is_equal = IsEqual(value, max_value);
-    auto sum      = is_equal.GetSum();
+
+    // Remove trailing zeros that IsEqual counted as equal so EvalSum doesn't count them
+    auto crypto_context = context_.GetCryptoContext();
+    auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
+    auto remainder      = numElements_ % batch_size;
+    if (remainder) {
+        std::vector<double> mask(batch_size, 0);
+        std::fill(mask.begin() + remainder, mask.end(), -1);
+        auto ptxt             = crypto_context->MakeCKKSPackedPlaintext(mask);
+        is_equal.data_.back() = crypto_context->EvalAdd(is_equal.data_.back(), ptxt);
+    }
+
+    auto sum = is_equal.GetSum();
     return sum;
 }
 

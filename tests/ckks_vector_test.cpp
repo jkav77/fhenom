@@ -68,7 +68,7 @@ protected:
             context.GenerateRotateKeys(rotation_indices_);
 
             lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> precise_params;
-            precise_params.SetMultiplicativeDepth(23);
+            precise_params.SetMultiplicativeDepth(24);
             precise_params.SetScalingModSize(50);
             precise_params.SetFirstModSize(60);
             precise_params.SetSecurityLevel(sl_);
@@ -219,15 +219,15 @@ TEST_F(CkksVectorTest, GetSum) {
     decrypted = result.Decrypt();
     ASSERT_NEAR(decrypted[0], 15, epsilon_);
 
-    precise_vector_.Encrypt(std::vector<double>(ring_dim * 1.5, 0));
+    precise_vector_.Encrypt(std::vector<double>(ring_dim * 1.25, 1));
     result    = precise_vector_.GetSum();
     decrypted = result.Decrypt();
-    ASSERT_NEAR(decrypted[0], 0, epsilon_);
+    ASSERT_NEAR(decrypted[0], ring_dim * 1.25, epsilon_);
 
     precise_vector_.Encrypt(std::vector<double>(ring_dim / 2, 1));
     result    = precise_vector_.GetSum();
     decrypted = result.Decrypt();
-    ASSERT_NEAR(decrypted[0], ring_dim / 2, epsilon_);
+    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
 }
 
 TEST_F(CkksVectorTest, GetCount) {
@@ -235,15 +235,21 @@ TEST_F(CkksVectorTest, GetCount) {
 
     std::vector<double> test_data(ring_dim / 2, 1);
     precise_vector_.Encrypt(test_data);
-    auto test = precise_vector_;
-    test.Encrypt(test_data);
-    auto result         = precise_vector_.IsEqual(1, 100);
-    auto decrypted      = result.Decrypt();
-    auto new_result     = result.GetSum();
-    test                = test.GetSum();
-    decrypted           = new_result.Decrypt();
-    auto decrypted_test = test.Decrypt();
-    ASSERT_NEAR(decrypted_test[0], ring_dim / 2.0, epsilon_);
+    auto result    = precise_vector_.GetCount(1, 100);
+    auto decrypted = result.Decrypt();
+    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
+
+    precise_vector_.Encrypt(std::vector<double>(40000, 1));
+    result    = precise_vector_.GetCount(1);
+    decrypted = result.Decrypt();
+    ASSERT_NEAR(decrypted[0], 40000, epsilon_);
+
+    test_data = std::vector<double>(ring_dim, 0);
+    std::fill(test_data.begin(), test_data.begin() + ring_dim / 2, 1);
+    precise_vector_.Encrypt(test_data);
+    decrypted = precise_vector_.GetCount(1).Decrypt();
+    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
+    decrypted = precise_vector_.GetCount(0).Decrypt();
     ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
 
     test_data = std::vector<double>(ring_dim / 2, 1);
@@ -258,11 +264,11 @@ TEST_F(CkksVectorTest, GetCount) {
     decrypted = result.Decrypt();
     ASSERT_NEAR(decrypted[0], 0, epsilon_);
 
-    std::vector<double> large_data(ring_dim * 1.5, 0);
+    std::vector<double> large_data(ring_dim * 1.25, 0);
     precise_vector_.Encrypt(large_data);
     result    = precise_vector_.GetCount(0);
     decrypted = result.Decrypt();
-    ASSERT_NEAR(decrypted[0], ring_dim * 1.5, epsilon_);
+    ASSERT_NEAR(decrypted[0], ring_dim * 1.25, epsilon_);
 }
 
 TEST_F(CkksVectorTest, Rotate) {
