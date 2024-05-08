@@ -27,55 +27,7 @@ public:
    *
    * @note The kernel must have the same number of dimensions as the CkksTensor
    */
-    fhenom::CkksTensor Conv2D(fhenom::Tensor kernel);
-
-    //////////////////////////////////////////////////////////////////////////////
-    // Convolution Helper Functions
-
-    /**
-   * @brief Create a Masked Convolution vectors from the provided kernel
-   *
-   * @param kernel The kernel to be applied to the CkksTensor
-   * @return std::vector<fhenom::Tensor>
-   */
-    std::vector<std::vector<double>> createMaskedConvVectors(const Tensor& kernel, size_t filter_number) const;
-
-    /**
-   * @brief Mask the provided vector with 0s on the left `numCols` elements of
-   * each row
-   *
-   * @param vec The vector to modify
-   * @param numCols The number of columns to mask (default 1)
-   */
-    void maskLeft(std::vector<double>& vec, size_t numCols = 1) const;
-
-    /**
-   * @brief Mask the provided vector with 0s on the top `numRows` rows
-   *
-   * @param vec The vector to modify
-   * @param rowSize The row size
-   * @param numRows The number of rows to mask (default 1)
-   */
-    void maskTop(std::vector<double>& vec, size_t numRows = 1) const;
-
-    /**
-   * @brief Mask the provided vector with 0s on the bottom `numRows` rows
-   *
-   * @param vec The vector to modify
-   * @param rowSize The row size
-   * @param numRows The number of rows to mask (default 1)
-   */
-    void maskBottom(std::vector<double>& vec, size_t numRows = 1) const;
-
-    /**
-   * @brief Mask the provided vector with 0s on the right `numCols` elements of
-   * each row
-   *
-   * @param vec The vector to modify
-   * @param rowSize The row size
-   * @param numCols The number of columns to mask (default 1)
-   */
-    void maskRight(std::vector<double>& vec, size_t numCols = 1) const;
+    fhenom::CkksTensor Conv2D(const fhenom::Tensor& kernel);
 
     //////////////////////////////////////////////////////////////////////////////
     // Getters and Setters

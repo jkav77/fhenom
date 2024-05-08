@@ -21,12 +21,12 @@ protected:
     CkksTensor ckks_tensor_;
     const std::filesystem::path test_data_dir_{"testData/ckks_tensor"};
     const Tensor kernel_{{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-                         {3, 3, 3, 1}};
+                         {1, 3, 3, 3}};
     const Tensor kernel2_{{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
-                          {3, 3, 3, 2}};
+                          {2, 3, 3, 3}};
 
-    // Data for a 5x5x3 tensor representing a 3-channel 5x5 image
+    // Data for a 3x5x5 tensor representing a 3-channel 5x5 image
     const std::vector<double> test_data_{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                                          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                                          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
@@ -38,7 +38,7 @@ protected:
         if (!std::filesystem::exists(test_data_dir_)) {
             context_ = Context{GetParameters()};
             context_.GenerateKeys();
-            context_.GenerateRotateKeys({-1, -2, -3, -4, 1, 2, 3, 4, 25, 50});
+            context_.GenerateRotateKeys({-1, -2, -4, -8, -16, -32, -64, -128, -256, 1, 2, 4, 8, 16, 32, 64, 128, 256});
             context_.Save(test_data_dir_);
             context_.SaveRotationKeys(test_data_dir_ / "key-rotate.txt");
             context_.SavePublicKey(test_data_dir_ / "key-public.txt");
@@ -53,8 +53,7 @@ protected:
 
         ckks_vector_.SetContext(context_);
         ckks_vector_.Encrypt(test_data_);
-        spdlog::debug("Creating tensor with {} element vector and shape {} {} {}", ckks_vector_.size(), 5, 5, 3);
-        ckks_tensor_ = CkksTensor{ckks_vector_, {5, 5, 3}};
+        ckks_tensor_ = CkksTensor{ckks_vector_, {3, 5, 5}};
     }
 
     static lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> GetParameters() {
@@ -91,8 +90,10 @@ TEST_F(CkksTensorTest, DefaultConstructor) {
 }
 
 TEST_F(CkksTensorTest, Conv2D) {
-    CkksTensor tensor          = ckks_tensor_.Conv2D(kernel_);
-    CkksVector vec             = tensor.GetData();
+    CkksTensor tensor = ckks_tensor_.Conv2D(kernel_);
+    ASSERT_EQ(tensor.GetShape(), (shape_t{1, 5, 5}));
+    CkksVector vec = tensor.GetData();
+    ASSERT_EQ(vec.size(), 25);
     std::vector<double> result = vec.Decrypt();
     ASSERT_NEAR(result[0], 12, epsilon_);
     ASSERT_NEAR(result[1], 18, epsilon_);
@@ -106,273 +107,36 @@ TEST_F(CkksTensorTest, Conv2D) {
     ASSERT_NEAR(result[23], 18, epsilon_);
     ASSERT_NEAR(result[19], 18, epsilon_);
     ASSERT_NEAR(result[18], 27, epsilon_);
-}
 
-// TEST_F(CkksTensorTest, masking) {
-// auto masked_vectors = ckks_tensor_.createMaskedConvVectors(kernel_, 0);
-// EXPECT_EQ(masked_vectors.size(), 9);
-// EXPECT_EQ(masked_vectors[0].size(), 75);
-// EXPECT_EQ(masked_vectors[0][0], 0);
-// EXPECT_EQ(masked_vectors[0][4], 0);
-// EXPECT_EQ(masked_vectors[0][5], 0);
-// EXPECT_EQ(masked_vectors[0][6], 1);
-// EXPECT_EQ(masked_vectors[0][7], 1);
-// EXPECT_EQ(masked_vectors[0][9], 1);
-// EXPECT_EQ(masked_vectors[0][25], 0);
-// EXPECT_EQ(masked_vectors[0][29], 0);
-// EXPECT_EQ(masked_vectors[0][70], 0);
-// EXPECT_EQ(masked_vectors[0][74], 1);
-// EXPECT_EQ(masked_vectors[0][4 * 5], 0);
-// EXPECT_EQ(masked_vectors[0][4 * 5 + 1], 1);
-// auto total = std::reduce(masked_vectors[0].begin(), masked_vectors[0].end());
-// EXPECT_EQ(total, 48);
-//
-// EXPECT_EQ(masked_vectors[4].size(), 75);
-// EXPECT_EQ(masked_vectors[4][0], 1);
-// EXPECT_EQ(masked_vectors[4][4], 1);
-// EXPECT_EQ(masked_vectors[4][5], 1);
-// EXPECT_EQ(masked_vectors[4][6], 1);
-// EXPECT_EQ(masked_vectors[4][9], 1);
-// EXPECT_EQ(masked_vectors[4][74], 1);
-// EXPECT_EQ(masked_vectors[4][4 * 5], 1);
-// EXPECT_EQ(masked_vectors[4][4 * 5 + 1], 1);
-// total = std::reduce(masked_vectors[4].begin(), masked_vectors[4].end());
-// EXPECT_EQ(total, 75);
-//
-// EXPECT_EQ(masked_vectors[8].size(), 75);
-// EXPECT_EQ(masked_vectors[8][4], 0);
-// EXPECT_EQ(masked_vectors[8][24], 0);
-// EXPECT_EQ(masked_vectors[8][20], 0);
-// EXPECT_EQ(masked_vectors[8][6], 1);
-// EXPECT_EQ(masked_vectors[8][9], 0);
-// EXPECT_EQ(masked_vectors[0][69], 1);
-// EXPECT_EQ(masked_vectors[8][74], 0);
-// EXPECT_EQ(masked_vectors[8][0], 1);
-// total = std::reduce(masked_vectors[8].begin(), masked_vectors[8].end());
-// EXPECT_EQ(total, 48);
-//
-// ckks_tensor_.createMaskedConvVectors(kernel2_, 0);
-// EXPECT_EQ(masked_vectors.size(), 9);
-// EXPECT_EQ(masked_vectors[0].size(), 75);
-// EXPECT_EQ(masked_vectors[0][0], 0);
-// EXPECT_EQ(masked_vectors[0][4], 0);
-// EXPECT_EQ(masked_vectors[0][5], 0);
-// EXPECT_EQ(masked_vectors[0][6], 1);
-// EXPECT_EQ(masked_vectors[0][7], 1);
-// EXPECT_EQ(masked_vectors[0][9], 1);
-// EXPECT_EQ(masked_vectors[0][25], 0);
-// EXPECT_EQ(masked_vectors[0][29], 0);
-// EXPECT_EQ(masked_vectors[0][70], 0);
-// EXPECT_EQ(masked_vectors[0][74], 1);
-// EXPECT_EQ(masked_vectors[0][4 * 5], 0);
-// EXPECT_EQ(masked_vectors[0][4 * 5 + 1], 1);
-// total = std::reduce(masked_vectors[0].begin(), masked_vectors[0].end());
-// EXPECT_EQ(total, 48);
-//
-// EXPECT_EQ(masked_vectors[4].size(), 75);
-// EXPECT_EQ(masked_vectors[4][0], 1);
-// EXPECT_EQ(masked_vectors[4][4], 1);
-// EXPECT_EQ(masked_vectors[4][5], 1);
-// EXPECT_EQ(masked_vectors[4][6], 1);
-// EXPECT_EQ(masked_vectors[4][9], 1);
-// EXPECT_EQ(masked_vectors[4][74], 1);
-// EXPECT_EQ(masked_vectors[4][4 * 5], 1);
-// EXPECT_EQ(masked_vectors[4][4 * 5 + 1], 1);
-// total = std::reduce(masked_vectors[4].begin(), masked_vectors[4].end());
-// EXPECT_EQ(total, 75);
-//
-// EXPECT_EQ(masked_vectors[8].size(), 75);
-// EXPECT_EQ(masked_vectors[8][4], 0);
-// EXPECT_EQ(masked_vectors[8][24], 0);
-// EXPECT_EQ(masked_vectors[8][20], 0);
-// EXPECT_EQ(masked_vectors[8][6], 1);
-// EXPECT_EQ(masked_vectors[8][9], 0);
-// EXPECT_EQ(masked_vectors[0][69], 1);
-// EXPECT_EQ(masked_vectors[8][74], 0);
-// EXPECT_EQ(masked_vectors[8][0], 1);
-// total = std::reduce(masked_vectors[8].begin(), masked_vectors[8].end());
-// EXPECT_EQ(total, 48);
-// }
+    tensor = ckks_tensor_.Conv2D(kernel2_);
+    vec    = tensor.GetData();
+    ASSERT_EQ(vec.size(), 50);
+    result = vec.Decrypt();
+    // first filter
+    ASSERT_NEAR(result[0], 12, epsilon_);
+    ASSERT_NEAR(result[1], 18, epsilon_);
+    ASSERT_NEAR(result[5], 18, epsilon_);
+    ASSERT_NEAR(result[6], 27, epsilon_);
+    ASSERT_NEAR(result[4], 12, epsilon_);
+    ASSERT_NEAR(result[3], 18, epsilon_);
+    ASSERT_NEAR(result[9], 18, epsilon_);
+    ASSERT_NEAR(result[8], 27, epsilon_);
+    ASSERT_NEAR(result[24], 12, epsilon_);
+    ASSERT_NEAR(result[23], 18, epsilon_);
+    ASSERT_NEAR(result[19], 18, epsilon_);
+    ASSERT_NEAR(result[18], 27, epsilon_);
 
-TEST(CkksTensorHelpers, CreateKernelVector) {
-    std::vector<double> kernel_values{1, 2, 3};
-    auto result = CreateKernelElementVector(kernel_values, 27, -4);
-    ASSERT_EQ(result.size(), 27 * 3);
-    ASSERT_EQ(result[0], 1);
-    ASSERT_EQ(result[27 - 5], 1);
-    ASSERT_EQ(result[27 - 4], 2);
-    ASSERT_EQ(result[27 * 3 - 4], 0);
-    ASSERT_EQ(result[27 * 3 - 5], 3);
-}
-
-TEST(CkksTensorHelpers, MaskRows) {
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    std::vector<double> kernel_vector{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    // Mask the top row
-    MaskRows(kernel_vector, 25, 3, 5, 0, 0);
-    ASSERT_EQ(kernel_vector[0], 0);
-    ASSERT_EQ(kernel_vector[4], 0);
-    ASSERT_EQ(kernel_vector[2], 0);
-    ASSERT_EQ(kernel_vector[5], 1);
-    ASSERT_EQ(kernel_vector[9], 1);
-    ASSERT_EQ(kernel_vector[24], 1);
-
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    kernel_vector = std::vector<double>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    // Mask the top row with positive rotation
-    MaskRows(kernel_vector, 25, 3, 5, 0, 4);
-    ASSERT_EQ(kernel_vector[0], 0);
-    ASSERT_EQ(kernel_vector[4], 0);
-    ASSERT_EQ(kernel_vector[2], 0);
-    ASSERT_EQ(kernel_vector[5], 0);
-    ASSERT_EQ(kernel_vector[8], 0);
-    ASSERT_EQ(kernel_vector[9], 1);
-    ASSERT_EQ(kernel_vector[20], 1);
-    ASSERT_EQ(kernel_vector[21], 1);
-    ASSERT_EQ(kernel_vector[24], 1);
-    ASSERT_EQ(kernel_vector[71], 1);
-    ASSERT_EQ(kernel_vector[74], 1);
-
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    kernel_vector = std::vector<double>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    // Mask the top row
-    MaskRows(kernel_vector, 25, 3, 5, 0, -4);
-    ASSERT_EQ(kernel_vector[0], 0);
-    ASSERT_EQ(kernel_vector[4], 1);
-    ASSERT_EQ(kernel_vector[2], 1);
-    ASSERT_EQ(kernel_vector[5], 1);
-    ASSERT_EQ(kernel_vector[9], 1);
-    ASSERT_EQ(kernel_vector[20], 1);
-    ASSERT_EQ(kernel_vector[21], 0);
-    ASSERT_EQ(kernel_vector[24], 0);
-    ASSERT_EQ(kernel_vector[71], 0);
-    ASSERT_EQ(kernel_vector[74], 0);
-
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    kernel_vector = std::vector<double>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    // Mask top 2 rows
-    MaskRows(kernel_vector, 25, 3, 5, 0, 0, 2);
-    ASSERT_EQ(kernel_vector[0], 0);
-    ASSERT_EQ(kernel_vector[4], 0);
-    ASSERT_EQ(kernel_vector[2], 0);
-    ASSERT_EQ(kernel_vector[5], 0);
-    ASSERT_EQ(kernel_vector[9], 0);
-    ASSERT_EQ(kernel_vector[10], 1);
-    ASSERT_EQ(kernel_vector[20], 1);
-    ASSERT_EQ(kernel_vector[24], 1);
-
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    kernel_vector = std::vector<double>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    // Mask bottom row
-    MaskRows(kernel_vector, 25, 3, 5, 4, 0);
-    ASSERT_EQ(kernel_vector[0], 1);
-    ASSERT_EQ(kernel_vector[4], 1);
-    ASSERT_EQ(kernel_vector[2], 1);
-    ASSERT_EQ(kernel_vector[5], 1);
-    ASSERT_EQ(kernel_vector[9], 1);
-    ASSERT_EQ(kernel_vector[20], 0);
-    ASSERT_EQ(kernel_vector[24], 0);
-}
-
-TEST(CkksTensorHelpers, MaskCols) {
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    auto kernel_vector = std::vector<double>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    MaskCols(kernel_vector, 5, 0, 0);
-    ASSERT_EQ(kernel_vector[0], 0);
-    ASSERT_EQ(kernel_vector[4], 1);
-    ASSERT_EQ(kernel_vector[2], 1);
-    ASSERT_EQ(kernel_vector[5], 0);
-    ASSERT_EQ(kernel_vector[9], 1);
-    ASSERT_EQ(kernel_vector[20], 0);
-    ASSERT_EQ(kernel_vector[24], 1);
-
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    kernel_vector = std::vector<double>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    MaskCols(kernel_vector, 5, 4, 0);
-    ASSERT_EQ(kernel_vector[0], 1);
-    ASSERT_EQ(kernel_vector[4], 0);
-    ASSERT_EQ(kernel_vector[2], 1);
-    ASSERT_EQ(kernel_vector[5], 1);
-    ASSERT_EQ(kernel_vector[9], 0);
-    ASSERT_EQ(kernel_vector[20], 1);
-    ASSERT_EQ(kernel_vector[24], 0);
-
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    kernel_vector = std::vector<double>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    MaskCols(kernel_vector, 5, 3, 0, 2);
-    ASSERT_EQ(kernel_vector[0], 1);
-    ASSERT_EQ(kernel_vector[4], 0);
-    ASSERT_EQ(kernel_vector[3], 0);
-    ASSERT_EQ(kernel_vector[2], 1);
-    ASSERT_EQ(kernel_vector[5], 1);
-    ASSERT_EQ(kernel_vector[8], 0);
-    ASSERT_EQ(kernel_vector[9], 0);
-    ASSERT_EQ(kernel_vector[20], 1);
-    ASSERT_EQ(kernel_vector[23], 0);
-    ASSERT_EQ(kernel_vector[24], 0);
-
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    kernel_vector = std::vector<double>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    MaskCols(kernel_vector, 5, 3, -1, 2);
-    ASSERT_EQ(kernel_vector[0], 1);
-    ASSERT_EQ(kernel_vector[4], 1);
-    ASSERT_EQ(kernel_vector[3], 0);
-    ASSERT_EQ(kernel_vector[2], 0);
-    ASSERT_EQ(kernel_vector[5], 1);
-    ASSERT_EQ(kernel_vector[6], 1);
-    ASSERT_EQ(kernel_vector[7], 0);
-    ASSERT_EQ(kernel_vector[8], 0);
-    ASSERT_EQ(kernel_vector[9], 1);
-    ASSERT_EQ(kernel_vector[20], 1);
-    ASSERT_EQ(kernel_vector[22], 0);
-    ASSERT_EQ(kernel_vector[23], 0);
-    ASSERT_EQ(kernel_vector[24], 1);
-
-    // 75 element vector represents 3-channel, 25-channel size vector from a 5x5 image
-    kernel_vector = std::vector<double>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-    MaskCols(kernel_vector, 5, 0, 1, 2);
-    ASSERT_EQ(kernel_vector[0], 1);
-    ASSERT_EQ(kernel_vector[1], 0);
-    ASSERT_EQ(kernel_vector[2], 0);
-    ASSERT_EQ(kernel_vector[4], 1);
-    ASSERT_EQ(kernel_vector[3], 1);
-    ASSERT_EQ(kernel_vector[5], 1);
-    ASSERT_EQ(kernel_vector[6], 0);
-    ASSERT_EQ(kernel_vector[8], 1);
-    ASSERT_EQ(kernel_vector[9], 1);
-    ASSERT_EQ(kernel_vector[20], 1);
-    ASSERT_EQ(kernel_vector[21], 0);
-    ASSERT_EQ(kernel_vector[22], 0);
-    ASSERT_EQ(kernel_vector[23], 1);
-    ASSERT_EQ(kernel_vector[24], 1);
+    // second filter
+    ASSERT_NEAR(result[25], 24, epsilon_);
+    ASSERT_NEAR(result[26], 36, epsilon_);
+    ASSERT_NEAR(result[5], 18, epsilon_);
+    ASSERT_NEAR(result[6], 27, epsilon_);
+    ASSERT_NEAR(result[4], 12, epsilon_);
+    ASSERT_NEAR(result[3], 18, epsilon_);
+    ASSERT_NEAR(result[9], 18, epsilon_);
+    ASSERT_NEAR(result[8], 27, epsilon_);
+    ASSERT_NEAR(result[24], 12, epsilon_);
+    ASSERT_NEAR(result[23], 18, epsilon_);
+    ASSERT_NEAR(result[19], 18, epsilon_);
+    ASSERT_NEAR(result[18], 27, epsilon_);
 }
