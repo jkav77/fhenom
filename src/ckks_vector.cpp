@@ -263,18 +263,51 @@ void CkksVector::PrecomputeRotations() {
 void CkksVector::Concat(const CkksVector& rhs) {
     auto crypto_context = context_.GetCryptoContext();
     auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
+    precomputedRotations_.clear();
 
-    numElements_ = data_.size() * batch_size + rhs.size();
-
-    data_.insert(data_.end(), rhs.data_.begin(), rhs.data_.end());
-
-    if (rhs.precomputedRotations_.empty()) {
-        precomputedRotations_.clear();
+    if (crypto_context != rhs.context_.GetCryptoContext()) {
+        spdlog::error("Cannot concatenate vectors with different contexts.");
+        throw std::invalid_argument("Cannot concatenate vectors with different contexts.");
     }
-    else {
-        precomputedRotations_.insert(precomputedRotations_.end(), rhs.precomputedRotations_.begin(),
-                                     rhs.precomputedRotations_.end());
+
+    if (size() == 0) {
+        data_        = rhs.data_;
+        numElements_ = rhs.size();
+        return;
     }
+
+    if (rhs.size() == 0) {
+        return;
+    }
+
+    auto space_remaining = data_.size() * batch_size - numElements_;
+
+    if (space_remaining == 0) {
+        std::copy(rhs.data_.begin(), rhs.data_.end(), std::back_inserter(data_));
+        numElements_ = data_.size() * batch_size + rhs.size();
+        return;
+    }
+
+    if (space_remaining >= rhs.size()) {
+        data_.back() += crypto_context->EvalRotate(rhs.data_.front(), space_remaining);
+        numElements_ += rhs.size();
+        return;
+    }
+
+    std::vector<double> mask_first_part(rhs.size(), 1);
+    std::fill(mask_first_part.begin(), mask_first_part.begin() + space_remaining, 0);
+    auto mask_first_part_ptxt = crypto_context->MakeCKKSPackedPlaintext(mask_first_part);
+
+    std::vector<double> mask_second_part(rhs.size(), 0);
+    std::fill(mask_second_part.begin(), mask_second_part.begin() + space_remaining, 1);
+    auto mask_second_part_ptxt = crypto_context->MakeCKKSPackedPlaintext(mask_second_part);
+
+    auto tmp = rhs.Rotate(space_remaining);
+    for (const auto& ctxt : tmp.data_) {
+        crypto_context->EvalAddInPlace(data_.back(), crypto_context->EvalMult(ctxt, mask_first_part_ptxt));
+        data_.push_back(crypto_context->EvalMult(ctxt, mask_second_part_ptxt));
+    }
+    numElements_ = size() + rhs.size();
 }
 
 CkksVector CkksVector::Merge(const std::vector<CkksVector>& vectors) {

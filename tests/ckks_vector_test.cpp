@@ -13,7 +13,8 @@ protected:
     const std::vector<double> test_data_{0, 1, -1, 16, -16, 5, 50, 2, 10, 1, 2, 3, 4, 5, 17};
     const std::vector<double> testDomain_{0, 1, 2, 4, 8, 16, 32, 64, 96, 100};
     const std::filesystem::path test_data_dir_{"testData/ckks_vector"};
-    const std::vector<int> rotation_indices_{1, 2, 4, 8, -1, -2, -4, -8};
+    const std::vector<int> rotation_indices_{1,  2,  4,  8,  16,  32,  64,  128,  256,  512,  1024,  2048,
+                                             -1, -2, -4, -8, -16, -32, -64, -128, -256, -512, -1024, -2048};
 
     // lbcrypto::ScalingTechnique scTech = lbcrypto::FLEXIBLEAUTOEXT;
     const uint32_t multDepth_         = 2;
@@ -395,45 +396,43 @@ TEST_F(CkksVectorTest, Addition) {
 
 TEST_F(CkksVectorTest, Concat) {
     auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
+    auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
 
+    CkksVector test_vector(ckks_vector_.GetContext());
     CkksVector vector_1(ckks_vector_.GetContext());
     CkksVector vector_2(ckks_vector_.GetContext());
-    auto test_size = ringDim_;
 
-    std::vector<double> values_1(test_size, 1);
-    vector_1.Encrypt(values_1);
+    vector_1.Encrypt(std::vector<double>(batch_size * 0.5, 1));
+    vector_2.Encrypt(std::vector<double>(batch_size * 0.75, 2));
 
-    std::vector<double> values_2(test_size, 2);
-    vector_2.Encrypt(values_2);
+    test_vector.Concat(vector_1);
+    auto decrypted_values = test_vector.Decrypt();
+    ASSERT_EQ(test_vector.size(), batch_size * 0.5);
+    ASSERT_NEAR(decrypted_values[0], 1, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 0.5 - 1], 1, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 0.5], 0, epsilon_);
 
-    vector_1.Concat(vector_2);
+    test_vector.Concat(vector_2);
 
-    ASSERT_EQ(vector_1.size(), test_size * 2);
-    auto decrypted_values = vector_1.Decrypt();
-    ASSERT_EQ(decrypted_values.size(), test_size * 2);
-    for (unsigned i = 0; i < test_size; ++i) {
-        ASSERT_NEAR(decrypted_values[i], 1, epsilon_);
-        ASSERT_NEAR(decrypted_values[i + test_size], 2, epsilon_);
-    }
+    ASSERT_EQ(test_vector.size(), batch_size * 1.25);
+    decrypted_values = test_vector.Decrypt();
+    ASSERT_EQ(decrypted_values.size(), test_vector.size());
+    ASSERT_NEAR(decrypted_values[0], 1, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 0.5 - 1], 1, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 0.5], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 1.25 - 1], 2, epsilon_);
 
-    CkksVector vector_3(ckks_vector_.GetContext());
-    std::vector<double> values_3(values_1.begin(), values_1.end() - 1024);
-    vector_3.Encrypt(values_3);
-    ASSERT_EQ(vector_3.size(), test_size - 1024);
-
-    vector_3.Concat(vector_2);
-    ASSERT_EQ(vector_3.size(), test_size * 2);
-    decrypted_values = vector_3.Decrypt();
-    ASSERT_EQ(decrypted_values.size(), test_size * 2);
-    for (unsigned i = 0; i < test_size - 1024; ++i) {
-        ASSERT_NEAR(decrypted_values[i], 1, epsilon_);
-        ASSERT_NEAR(decrypted_values[i + test_size], 2, epsilon_);
-    }
-
-    for (unsigned i = test_size - 1024; i < test_size; ++i) {
-        ASSERT_NEAR(decrypted_values[i], 0, epsilon_);
-        ASSERT_NEAR(decrypted_values[i + test_size], 2, epsilon_);
-    }
+    test_vector.Concat(vector_2);
+    ASSERT_EQ(test_vector.size(), batch_size * 2.0);
+    decrypted_values = test_vector.Decrypt();
+    ASSERT_NEAR(decrypted_values[0], 1, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 0.5 - 1], 1, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 0.5], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 1.25 - 1], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 1.25], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[batch_size * 2.0 - 1], 2, epsilon_);
 }
 
 TEST_F(CkksVectorTest, Merge) {

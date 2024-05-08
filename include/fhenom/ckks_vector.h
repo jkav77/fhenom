@@ -171,9 +171,8 @@ public:
      * @brief Concatenate a vector onto this vector
      *
      * @param rhs The vector to concatenate on the end
-     *
-     * @note Unused slots will be preserved and may create a gap in the data. This
-     * method works best when the vector has used all of the slots.
+     * 
+     * @note This assumes that all unused slots are zero
      */
     void Concat(const CkksVector& rhs);
 
