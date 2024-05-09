@@ -1,6 +1,7 @@
 #include <fhenom/context.h>
 #include <openfhe.h>
 #include <spdlog/spdlog.h>
+#include "test_utils.h"
 
 #include <filesystem>
 
@@ -8,14 +9,11 @@
 
 using fhenom::Context;
 
-const uint kMultDepth{2};
-const uint kRingDim{8192};
-// const uint BATCH_SIZE{16};
-
 class ContextTest : public ::testing::Test {
 protected:
     std::filesystem::path test_data_dir_{"testData/ckks_context"};
     Context context_;
+    Context fhe_context_;
     ContextTest() {
         spdlog::set_level(spdlog::level::debug);
         using lbcrypto::FIXEDAUTO;
@@ -27,31 +25,15 @@ protected:
         using lbcrypto::UNIFORM_TERNARY;
 
         if (!std::filesystem::exists(test_data_dir_)) {
-            ScalingTechnique sc_tech = FIXEDAUTO;
-            uint32_t mult_depth      = kMultDepth;
-            if (sc_tech == FLEXIBLEAUTOEXT)
-                mult_depth += 1;
-            uint32_t scale_mod_size = 24;
-            uint32_t first_mod_size = 30;
-            uint32_t ring_dim       = kRingDim;
-            SecurityLevel sl        = HEStd_128_classic;
-            // uint32_t slots = BATCH_SIZE;  // sparsely-packed
-            // uint32_t batchSize = slots;
+            fhe_context_ = GetFheContext();
+            fhe_context_.GenerateKeys();
+            fhe_context_.GenerateBootstrapKeys();
+            auto fhe_dir = test_data_dir_ / "fhe";
+            fhe_context_.Save(fhe_dir);
+            fhe_context_.SavePublicKey(fhe_dir / "key-public.txt");
+            fhe_context_.SaveSecretKey(fhe_dir / "key-secret.txt");
 
-            lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ckks_parameters;
-            ckks_parameters.SetMultiplicativeDepth(mult_depth);
-            ckks_parameters.SetScalingModSize(scale_mod_size);
-            ckks_parameters.SetFirstModSize(first_mod_size);
-            ckks_parameters.SetScalingTechnique(sc_tech);
-            ckks_parameters.SetSecurityLevel(sl);
-            ckks_parameters.SetRingDim(ring_dim);
-            // ckksParameters.SetBatchSize(batchSize);
-            ckks_parameters.SetSecretKeyDist(UNIFORM_TERNARY);
-            ckks_parameters.SetKeySwitchTechnique(HYBRID);
-            ckks_parameters.SetNumLargeDigits(3);
-
-            spdlog::debug("Testing CKKS parameters");
-            context_ = Context{ckks_parameters};
+            context_ = GetLeveledContext();
             context_.GenerateKeys();
             context_.GenerateSumKey();
             context_.GenerateRotateKeys({-1, 1, -3, 3});
@@ -62,11 +44,10 @@ protected:
             context_.SaveRotationKeys(test_data_dir_ / "key-rotate.txt");
         }
         else {
-            context_ = Context{};
-            context_.Load(test_data_dir_);
-            context_.LoadEvalSumKeys(test_data_dir_ / "key-eval-sum.txt");
-            context_.LoadRotationKeys(test_data_dir_ / "key-rotate.txt");
+            context_ = Context(test_data_dir_);
             context_.LoadPublicKey(test_data_dir_ / "key-public.txt");
+
+            fhe_context_ = Context(test_data_dir_ / "fhe");
         }
     }
 };
@@ -103,7 +84,7 @@ TEST_F(ContextTest, LoadCryptoContext) {
 
     ASSERT_THROW(context_.LoadCryptoContext(test_data_dir_ / "nonexistent.txt"), std::filesystem::filesystem_error);
 
-    ASSERT_EQ(context_.GetCryptoContext()->GetRingDimension(), kRingDim);
+    ASSERT_EQ(context_.GetCryptoContext()->GetRingDimension(), 8192);
 }
 
 TEST_F(ContextTest, SaveEvalMultKeys) {
@@ -115,6 +96,17 @@ TEST_F(ContextTest, SaveEvalMultKeys) {
     ASSERT_TRUE(std::filesystem::file_size(key_file) > 0);
 
     std::filesystem::remove(key_file);
+}
+
+TEST_F(ContextTest, GenerateBootstrapKeys) {
+    auto fhe_context    = GetFheContext();
+    auto crypto_context = fhe_context.GetCryptoContext();
+    crypto_context->ClearEvalAutomorphismKeys();
+    ASSERT_EQ(crypto_context->GetAllEvalAutomorphismKeys().size(), 0);
+
+    fhe_context.GenerateKeys();
+    fhe_context.GenerateBootstrapKeys();
+    ASSERT_GT(crypto_context->GetAllEvalAutomorphismKeys().size(), 0);
 }
 
 // This test doesn't work because the eval keys are already loaded in the

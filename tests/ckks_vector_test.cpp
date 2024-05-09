@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <spdlog/spdlog.h>
 #include <openfhe.h>
+#include "test_utils.h"
 
 #include <filesystem>
 #include <vector>
@@ -37,7 +38,6 @@ protected:
         if (std::filesystem::exists(test_data_dir_)) {
             spdlog::debug("Saved test data found, loading...");
             context.Load("testData/ckks_vector");
-            context.LoadRotationKeys(test_data_dir_ / "key-rotate.txt");
             context.LoadPublicKey("testData/ckks_vector/key-public.txt");
             context.LoadSecretKey("testData/ckks_vector/key-secret.txt");
             ckks_vector_.SetContext(context);
@@ -137,6 +137,12 @@ TEST_F(CkksVectorTest, Decrypt) {
 
 //////////////////////////////////////////////////////////////////////////////
 // Homomorphic Operations
+
+TEST_F(CkksVectorTest, Bootstrap) {
+    ckks_vector_.Encrypt(test_data_);
+    ckks_vector_.Bootstrap();
+    SUCCEED();
+}
 
 TEST_F(CkksVectorTest, GetSign) {
     precise_vector_ *= std::vector<double>(test_data_.size(), 1.0 / 50.0);

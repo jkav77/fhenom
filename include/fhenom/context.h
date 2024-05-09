@@ -7,13 +7,13 @@
 namespace fhenom {
 class Context {
 protected:
-    lbcrypto::CryptoContext<lbcrypto::DCRTPoly> cryptoContext;
-    lbcrypto::KeyPair<lbcrypto::DCRTPoly> keyPair;
-    lbcrypto::SecurityLevel ckksSecurityLevel{lbcrypto::HEStd_NotSet};
+    lbcrypto::CryptoContext<lbcrypto::DCRTPoly> crypto_context_;
+    lbcrypto::KeyPair<lbcrypto::DCRTPoly> key_pair_;
+    lbcrypto::SecurityLevel security_level_{lbcrypto::HEStd_NotSet};
 
 public:
     Context() = default;
-    Context(lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ccParams);
+    Context(lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ccParams, bool enable_fhe = false);
     Context(std::filesystem::path savedContextPath) {
         Load(savedContextPath);
     }
@@ -24,24 +24,25 @@ public:
     void GenerateKeys();
     void GenerateSumKey();
     void GenerateRotateKeys(const std::vector<int>& indices);
+    void GenerateBootstrapKeys();
 
     //////////////////////////////////////////////////////////////////////////////
     // Getters and Setters
 
     const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& GetCryptoContext() const {
-        return cryptoContext;
+        return crypto_context_;
     }
 
     void SetCryptoContext(const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& context) {
-        cryptoContext = context;
+        crypto_context_ = context;
     }
 
     const lbcrypto::KeyPair<lbcrypto::DCRTPoly>& GetKeyPair() const {
-        return keyPair;
+        return key_pair_;
     }
 
     void SetKeyPair(const lbcrypto::KeyPair<lbcrypto::DCRTPoly>& keys) {
-        keyPair = keys;
+        key_pair_ = keys;
     }
 
     bool HasRotationIdx(int idx) const;

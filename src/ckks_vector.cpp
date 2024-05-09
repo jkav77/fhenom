@@ -21,6 +21,18 @@ using std::size_t;
 //////////////////////////////////////////////////////////////////////////////
 // Homomorphic Operations
 
+void CkksVector::Bootstrap() {
+    if (size() == 0) {
+        spdlog::warn("Data is empty. Nothing to bootstrap.");
+        return;
+    }
+
+    auto crypto_context = context_.GetCryptoContext();
+    for (auto& ctxt : data_) {
+        ctxt = crypto_context->EvalBootstrap(ctxt);
+    }
+}
+
 CkksVector CkksVector::GetSignUsingPolyComp() const {
     auto crypto_context = context_.GetCryptoContext();
 

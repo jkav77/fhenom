@@ -12,44 +12,57 @@
 
 using fhenom::Context;
 
-Context::Context(lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ccParams)
-    : ckksSecurityLevel{ccParams.GetSecurityLevel()} {
-    cryptoContext = GenCryptoContext(ccParams);
-    cryptoContext->Enable(lbcrypto::PKE);
-    cryptoContext->Enable(lbcrypto::LEVELEDSHE);
-    cryptoContext->Enable(lbcrypto::ADVANCEDSHE);
-    cryptoContext->Enable(lbcrypto::KEYSWITCH);
+Context::Context(lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ccParams, bool enable_fhe)
+    : security_level_{ccParams.GetSecurityLevel()} {
+    crypto_context_ = GenCryptoContext(ccParams);
+    crypto_context_->Enable(lbcrypto::PKE);
+    crypto_context_->Enable(lbcrypto::LEVELEDSHE);
+    crypto_context_->Enable(lbcrypto::ADVANCEDSHE);
+    crypto_context_->Enable(lbcrypto::KEYSWITCH);
+    if (enable_fhe) {
+        crypto_context_->Enable(lbcrypto::FHE);
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////
 // Key management
 
 void Context::GenerateKeys() {
-    keyPair = cryptoContext->KeyGen();
-    cryptoContext->EvalMultKeyGen(keyPair.secretKey);
+    key_pair_ = crypto_context_->KeyGen();
+    crypto_context_->EvalMultKeyGen(key_pair_.secretKey);
 }
 
 void Context::GenerateSumKey() {
-    if (keyPair.secretKey == nullptr) {
+    if (key_pair_.secretKey == nullptr) {
         spdlog::error("Secret key is not set. Cannot generate sum key.");
         throw std::invalid_argument("Secret key is not set. Cannot generate sum key.");
     }
 
-    cryptoContext->EvalSumKeyGen(keyPair.secretKey);
+    crypto_context_->EvalSumKeyGen(key_pair_.secretKey);
 }
 
 void Context::GenerateRotateKeys(const std::vector<int>& indices) {
-    if (keyPair.secretKey == nullptr) {
+    if (key_pair_.secretKey == nullptr) {
         spdlog::error("Secret key is not set. Cannot generate rotation keys.");
         throw std::invalid_argument("Secret key is not set. Cannot generate rotation keys.");
     }
 
-    cryptoContext->EvalRotateKeyGen(keyPair.secretKey, indices);
+    crypto_context_->EvalRotateKeyGen(key_pair_.secretKey, indices);
+}
+
+void Context::GenerateBootstrapKeys() {
+    if (key_pair_.secretKey == nullptr) {
+        spdlog::error("Secret key is not set. Cannot generate bootstrapping keys.");
+        throw std::invalid_argument("Secret key is not set. Cannot generate bootstrapping keys.");
+    }
+
+    crypto_context_->EvalBootstrapSetup({4, 4});
+    crypto_context_->EvalBootstrapKeyGen(key_pair_.secretKey, crypto_context_->GetRingDimension() / 2);
 }
 
 bool Context::HasRotationIdx(int idx) const {
     auto cc      = GetCryptoContext();
-    auto key_map = cc->GetEvalAutomorphismKeyMap(keyPair.publicKey->GetKeyTag());
+    auto key_map = cc->GetEvalAutomorphismKeyMap(key_pair_.publicKey->GetKeyTag());
     auto am_idx  = lbcrypto::FindAutomorphismIndex2n(idx, cc->GetCyclotomicOrder());
     return key_map.count(am_idx) == 1;
 }
@@ -82,7 +95,7 @@ void Context::Save(const std::filesystem::path& path) const {
 }
 
 void Context::SaveCryptoContext(const std::filesystem::path& path) const {
-    if (!lbcrypto::Serial::SerializeToFile(path.string(), cryptoContext, lbcrypto::SerType::BINARY)) {
+    if (!lbcrypto::Serial::SerializeToFile(path.string(), crypto_context_, lbcrypto::SerType::BINARY)) {
         throw std::filesystem::filesystem_error("Error writing serialization of the crypto context to " + path.string(),
                                                 std::make_error_code(std::errc::io_error));
     }
@@ -95,7 +108,7 @@ void Context::LoadCryptoContext(const std::filesystem::path& path) {
         throw std::filesystem::filesystem_error("Directory does not exist.", std::make_error_code(std::errc::io_error));
     }
 
-    if (!lbcrypto::Serial::DeserializeFromFile(path.string(), cryptoContext, lbcrypto::SerType::BINARY)) {
+    if (!lbcrypto::Serial::DeserializeFromFile(path.string(), crypto_context_, lbcrypto::SerType::BINARY)) {
         spdlog::error("Error reading serialization of the crypto context.");
 
         throw std::filesystem::filesystem_error("Error reading serialization of the crypto context.",
@@ -112,7 +125,7 @@ void Context::LoadEvalMultKeys(const std::filesystem::path& path) {
     }
 
     std::ifstream mult_key_istream{path, std::ios::in | std::ios::binary};
-    if (!cryptoContext->DeserializeEvalMultKey(mult_key_istream, lbcrypto::SerType::BINARY)) {
+    if (!crypto_context_->DeserializeEvalMultKey(mult_key_istream, lbcrypto::SerType::BINARY)) {
         spdlog::error("Could not deserialize the eval mult key file");
         throw std::filesystem::filesystem_error("Could not deserialize the eval mult key file",
                                                 std::make_error_code(std::errc::io_error));
@@ -122,7 +135,7 @@ void Context::LoadEvalMultKeys(const std::filesystem::path& path) {
 void Context::SaveEvalMultKeys(const std::filesystem::path& path) const {
     std::ofstream emkeyfile(path.string(), std::ios::out | std::ios::binary);
     if (emkeyfile.is_open()) {
-        if (!cryptoContext->SerializeEvalMultKey(emkeyfile, lbcrypto::SerType::BINARY)) {
+        if (!crypto_context_->SerializeEvalMultKey(emkeyfile, lbcrypto::SerType::BINARY)) {
             spdlog::error("Error writing serialization of the eval mult keys");
             throw std::filesystem::filesystem_error("Error writing serialization of the eval mult keys",
                                                     std::make_error_code(std::errc::io_error));
@@ -146,7 +159,7 @@ void Context::LoadEvalSumKeys(const std::filesystem::path& path) {
     }
 
     std::ifstream sum_key_istream{path, std::ios::in | std::ios::binary};
-    if (!cryptoContext->DeserializeEvalSumKey(sum_key_istream, lbcrypto::SerType::BINARY)) {
+    if (!crypto_context_->DeserializeEvalSumKey(sum_key_istream, lbcrypto::SerType::BINARY)) {
         spdlog::error("Could not deserialize the eval sum key file");
         throw std::filesystem::filesystem_error("Could not deserialize the eval sum key file",
                                                 std::make_error_code(std::errc::io_error));
@@ -156,7 +169,7 @@ void Context::LoadEvalSumKeys(const std::filesystem::path& path) {
 void Context::SaveEvalSumKeys(const std::filesystem::path& path) const {
     std::ofstream sum_key_ostream(path.string(), std::ios::out | std::ios::binary);
     if (sum_key_ostream.is_open()) {
-        if (!cryptoContext->SerializeEvalSumKey(sum_key_ostream, lbcrypto::SerType::BINARY)) {
+        if (!crypto_context_->SerializeEvalSumKey(sum_key_ostream, lbcrypto::SerType::BINARY)) {
             spdlog::error("Error writing serialization of the eval sum keys");
             throw std::filesystem::filesystem_error("Error writing serialization of the eval sum keys",
                                                     std::make_error_code(std::errc::io_error));
@@ -180,7 +193,7 @@ void Context::LoadRotationKeys(const std::filesystem::path& path) {
     }
 
     std::ifstream rotate_key_istream{path, std::ios::in | std::ios::binary};
-    if (!cryptoContext->DeserializeEvalAutomorphismKey(rotate_key_istream, lbcrypto::SerType::BINARY)) {
+    if (!crypto_context_->DeserializeEvalAutomorphismKey(rotate_key_istream, lbcrypto::SerType::BINARY)) {
         spdlog::error("Could not deserialize the eval rotate key file");
         throw std::filesystem::filesystem_error("Could not deserialize the eval rotate key file",
                                                 std::make_error_code(std::errc::io_error));
@@ -191,7 +204,7 @@ void Context::SaveRotationKeys(const std::filesystem::path& path) const {
     std::ofstream rotate_key_file(path.string(), std::ios::out | std::ios::binary);
 
     if (rotate_key_file.is_open()) {
-        if (!cryptoContext->SerializeEvalAutomorphismKey(rotate_key_file, lbcrypto::SerType::BINARY)) {
+        if (!crypto_context_->SerializeEvalAutomorphismKey(rotate_key_file, lbcrypto::SerType::BINARY)) {
             spdlog::error("Error writing serialization of the eval rotate keys");
             throw std::filesystem::filesystem_error("Error writing serialization of the eval rotate keys",
                                                     std::make_error_code(std::errc::io_error));
@@ -207,7 +220,7 @@ void Context::SaveRotationKeys(const std::filesystem::path& path) const {
 }
 
 void Context::SavePublicKey(const std::filesystem::path& path) const {
-    if (!lbcrypto::Serial::SerializeToFile(path.string(), keyPair.publicKey, lbcrypto::SerType::BINARY)) {
+    if (!lbcrypto::Serial::SerializeToFile(path.string(), key_pair_.publicKey, lbcrypto::SerType::BINARY)) {
         spdlog::error("Error writing serialization of public key");
         throw std::filesystem::filesystem_error("Error writing serialization of public key",
                                                 std::make_error_code(std::errc::io_error));
@@ -216,7 +229,7 @@ void Context::SavePublicKey(const std::filesystem::path& path) const {
 }
 
 void Context::LoadPublicKey(const std::filesystem::path& path) {
-    if (!lbcrypto::Serial::DeserializeFromFile(path.string(), keyPair.publicKey, lbcrypto::SerType::BINARY)) {
+    if (!lbcrypto::Serial::DeserializeFromFile(path.string(), key_pair_.publicKey, lbcrypto::SerType::BINARY)) {
         spdlog::error("Error reading serialization of public key");
         throw std::filesystem::filesystem_error("Error reading serialization of public key",
                                                 std::make_error_code(std::errc::io_error));
@@ -224,7 +237,7 @@ void Context::LoadPublicKey(const std::filesystem::path& path) {
 }
 
 void Context::SaveSecretKey(const std::filesystem::path& path) const {
-    if (!lbcrypto::Serial::SerializeToFile(path.string(), keyPair.secretKey, lbcrypto::SerType::BINARY)) {
+    if (!lbcrypto::Serial::SerializeToFile(path.string(), key_pair_.secretKey, lbcrypto::SerType::BINARY)) {
         spdlog::error("Error writing serialization of secret key");
         throw std::filesystem::filesystem_error("Error writing serialization of secret key",
                                                 std::make_error_code(std::errc::io_error));
@@ -233,7 +246,7 @@ void Context::SaveSecretKey(const std::filesystem::path& path) const {
 }
 
 void Context::LoadSecretKey(const std::filesystem::path& path) {
-    if (!lbcrypto::Serial::DeserializeFromFile(path.string(), keyPair.secretKey, lbcrypto::SerType::BINARY)) {
+    if (!lbcrypto::Serial::DeserializeFromFile(path.string(), key_pair_.secretKey, lbcrypto::SerType::BINARY)) {
         spdlog::error("Error reading serialization of secret key");
         throw std::filesystem::filesystem_error("Error reading serialization of secret key",
                                                 std::make_error_code(std::errc::io_error));

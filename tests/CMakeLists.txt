@@ -7,8 +7,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable( googletest )
 set( INSTALL_GTEST OFF )
 
-add_executable( context_test context_test.cpp ../src/context.cpp )
-add_executable( ckks_vector_test ckks_vector_test.cpp ../src/context.cpp ../src/ckks_vector.cpp )
+add_executable( context_test context_test.cpp ../src/context.cpp test_utils.cpp )
+add_executable( ckks_vector_test ckks_vector_test.cpp ../src/context.cpp ../src/ckks_vector.cpp test_utils.cpp )
 add_executable( ckks_tensor_test ckks_tensor_test.cpp ../src/context.cpp ../src/ckks_vector.cpp ../src/ckks_tensor.cpp ../src/tensor.cpp )
 add_executable( tensor_test tensor_test.cpp ../src/tensor.cpp )
 add_custom_target( tests DEPENDS context_test ckks_vector_test ckks_tensor_test tensor_test )

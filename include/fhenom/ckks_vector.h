@@ -49,6 +49,14 @@ public:
     // Homomorphic Operations
 
     /**
+     * @brief Bootstrap each of the underlying ciphertexts
+     * 
+     * @note This method assumes that all necessary automorphism keys are loaded.
+     * 
+     */
+    void Bootstrap();
+
+    /**
      * @brief Evaluates the sign in each slot of the vector
      *
      * @return CkksVector A vector with -1 in negative slots, 0 in 0 slots, and 1
