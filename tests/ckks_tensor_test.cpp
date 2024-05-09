@@ -38,7 +38,8 @@ protected:
         if (!std::filesystem::exists(test_data_dir_)) {
             context_ = Context{GetParameters()};
             context_.GenerateKeys();
-            context_.GenerateRotateKeys({-1, -2, -4, -8, -16, -32, -64, -128, -256, 1, 2, 4, 8, 16, 32, 64, 128, 256});
+            context_.GenerateRotateKeys({-1, -2, -4, -8, -16, -32, -64, -128, -256, -512, -1024, -2048, -4096,
+                                         1,  2,  4,  8,  16,  32,  64,  128,  256,  512,  1024,  2048,  4096});
             context_.Save(test_data_dir_);
             context_.SaveRotationKeys(test_data_dir_ / "key-rotate.txt");
             context_.SavePublicKey(test_data_dir_ / "key-public.txt");
@@ -129,6 +130,30 @@ TEST_F(CkksTensorTest, Conv2D) {
     // second filter
     ASSERT_NEAR(result[25], 24, epsilon_);
     ASSERT_NEAR(result[26], 36, epsilon_);
+    ASSERT_NEAR(result[30], 36, epsilon_);
+    ASSERT_NEAR(result[31], 54, epsilon_);
+    ASSERT_NEAR(result[29], 24, epsilon_);
+    ASSERT_NEAR(result[28], 36, epsilon_);
+    ASSERT_NEAR(result[34], 36, epsilon_);
+    ASSERT_NEAR(result[33], 54, epsilon_);
+    ASSERT_NEAR(result[49], 24, epsilon_);
+    ASSERT_NEAR(result[48], 36, epsilon_);
+    ASSERT_NEAR(result[44], 36, epsilon_);
+    ASSERT_NEAR(result[43], 54, epsilon_);
+
+    // Conv layer with 4 filters
+    std::vector<double> weights(108);
+    for (unsigned i = 0; i < 4; ++i) {
+        std::fill(weights.begin() + i * 27, weights.begin() + (i + 1) * 27, i + 1);
+    }
+    Tensor filter(weights, {4, 3, 3, 3});
+    tensor = ckks_tensor_.Conv2D(filter);
+    vec    = tensor.GetData();
+    ASSERT_EQ(vec.size(), 100);
+    result = vec.Decrypt();
+    // first filter
+    ASSERT_NEAR(result[0], 12, epsilon_);
+    ASSERT_NEAR(result[1], 18, epsilon_);
     ASSERT_NEAR(result[5], 18, epsilon_);
     ASSERT_NEAR(result[6], 27, epsilon_);
     ASSERT_NEAR(result[4], 12, epsilon_);
@@ -139,4 +164,66 @@ TEST_F(CkksTensorTest, Conv2D) {
     ASSERT_NEAR(result[23], 18, epsilon_);
     ASSERT_NEAR(result[19], 18, epsilon_);
     ASSERT_NEAR(result[18], 27, epsilon_);
+
+    // second filter
+    ASSERT_NEAR(result[25], 24, epsilon_);
+    ASSERT_NEAR(result[26], 36, epsilon_);
+    ASSERT_NEAR(result[30], 36, epsilon_);
+    ASSERT_NEAR(result[31], 54, epsilon_);
+    ASSERT_NEAR(result[29], 24, epsilon_);
+    ASSERT_NEAR(result[28], 36, epsilon_);
+    ASSERT_NEAR(result[34], 36, epsilon_);
+    ASSERT_NEAR(result[33], 54, epsilon_);
+    ASSERT_NEAR(result[49], 24, epsilon_);
+    ASSERT_NEAR(result[48], 36, epsilon_);
+    ASSERT_NEAR(result[44], 36, epsilon_);
+    ASSERT_NEAR(result[43], 54, epsilon_);
+}
+
+TEST_F(CkksTensorTest, Conv2DSpanCiphertexts) {
+    auto batch_size = context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize();
+
+    const std::vector<double> image_data(batch_size * 0.75, 1);
+    CkksVector image_vec(context_);
+    image_vec.Encrypt(image_data);
+    CkksTensor image(image_vec, {3, 32, 32});
+
+    std::vector<double> weights_vec(27 * 5);
+    for (unsigned i = 0; i < 5; ++i) {
+        std::fill(weights_vec.begin() + i * 27, weights_vec.begin() + (i + 1) * 27, i + 1);
+    }
+    Tensor weights(weights_vec, {5, 3, 3, 3});
+
+    auto result = image.Conv2D(weights);
+    ASSERT_EQ(result.GetShape(), (shape_t{5, 32, 32}));
+    auto result_vec = result.GetData();
+    ASSERT_EQ(result_vec.size(), 5 * 32 * 32);
+
+    auto decrypted_values = result_vec.Decrypt();
+    // first filter
+    ASSERT_NEAR(decrypted_values[0], 12, epsilon_);
+    ASSERT_NEAR(decrypted_values[1], 18, epsilon_);
+    ASSERT_NEAR(decrypted_values[31], 12, epsilon_);
+    ASSERT_NEAR(decrypted_values[32], 18, epsilon_);
+    ASSERT_NEAR(decrypted_values[33], 27, epsilon_);
+    ASSERT_NEAR(decrypted_values[1022], 18, epsilon_);
+    ASSERT_NEAR(decrypted_values[1023], 12, epsilon_);
+
+    // first filter
+    ASSERT_NEAR(decrypted_values[0 + 1024], 12 * 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[1 + 1024], 18 * 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[31 + 1024], 12 * 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[32 + 1024], 18 * 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[33 + 1024], 27 * 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[1022 + 1024], 18 * 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[1023 + 1024], 12 * 2, epsilon_);
+
+    // fifth filter
+    ASSERT_NEAR(decrypted_values[0 + 1024 * 4], 12 * 5, epsilon_);
+    ASSERT_NEAR(decrypted_values[1 + 1024 * 4], 18 * 5, epsilon_);
+    ASSERT_NEAR(decrypted_values[31 + 1024 * 4], 12 * 5, epsilon_);
+    ASSERT_NEAR(decrypted_values[32 + 1024 * 4], 18 * 5, epsilon_);
+    ASSERT_NEAR(decrypted_values[33 + 1024 * 4], 27 * 5, epsilon_);
+    ASSERT_NEAR(decrypted_values[1022 + 1024 * 4], 18 * 5, epsilon_);
+    ASSERT_NEAR(decrypted_values[1023 + 1024 * 4], 12 * 5, epsilon_);
 }

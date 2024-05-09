@@ -80,6 +80,7 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel) {
     // Generate an output channel for every filter in the kernel tensor
     for (unsigned filter_index = 0; filter_index < num_filters; ++filter_index) {
         std::vector<std::vector<double>> filter(kernel_size, std::vector<double>(num_channels * channel_size));
+
         // Generate a filter vector for every (row, column) in the kernel
         for (unsigned row_index = 0; row_index < kernel_num_rows; ++row_index) {
             for (unsigned col_index = 0; col_index < kernel_num_cols; ++col_index) {
@@ -137,17 +138,9 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel) {
         std::vector<double> filter_mask(num_channels * channel_size, 0);
         std::fill(filter_mask.begin(), filter_mask.begin() + channel_size, 1);
         filter_output *= filter_mask;
+        filter_output.SetNumElements(channel_size);
 
-        // Rotate the output to the correct channel
-        filter_output = filter_output.Rotate(-filter_index * channel_size);
-
-        // Add the output for this channel to the overall output
-        if (conv_output.size() == 0) {
-            conv_output = filter_output;
-        }
-        else {
-            conv_output += filter_output;
-        }
+        conv_output.Concat(filter_output);
     }
 
     // Output number of channels is the number of filters we applied

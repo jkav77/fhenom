@@ -289,7 +289,7 @@ void CkksVector::Concat(const CkksVector& rhs) {
     }
 
     if (space_remaining >= rhs.size()) {
-        data_.back() += crypto_context->EvalRotate(rhs.data_.front(), space_remaining);
+        data_.back() += rhs.Rotate(space_remaining).data_.front();
         numElements_ += rhs.size();
         return;
     }
