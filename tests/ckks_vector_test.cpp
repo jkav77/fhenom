@@ -146,13 +146,51 @@ TEST_F(CkksVectorTest, GetSign) {
     ASSERT_EQ(result.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size(); ++i) {
         if (test_data_[i] < 0) {
-            ASSERT_NEAR(result[i], -1, 0.05);
+            ASSERT_NEAR(result[i], -1, epsilon_);
         }
         else if (test_data_[i] > 0) {
-            ASSERT_NEAR(result[i], 1, 0.05);
+            ASSERT_NEAR(result[i], 1, epsilon_);
         }
         else {
+            ASSERT_NEAR(result[i], 0, epsilon_);
+        }
+    }
+}
+
+TEST_F(CkksVectorTest, ReLU) {
+    std::vector<double> relu_data(20);
+    std::iota(relu_data.begin(), relu_data.end(), -10.0);
+    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.1; });
+
+    precise_vector_.Encrypt(relu_data);
+
+    auto result = precise_vector_.ReLU().Decrypt();
+
+    ASSERT_EQ(result.size(), relu_data.size());
+    for (unsigned i = 0; i < relu_data.size(); ++i) {
+        if (relu_data[i] < 0) {
             ASSERT_NEAR(result[i], 0, 0.05);
+        }
+        else {
+            ASSERT_NEAR(result[i], relu_data[i], 0.05);
+        }
+    }
+
+    relu_data = std::vector<double>(201);
+    std::iota(relu_data.begin(), relu_data.end(), -100.0);
+    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.01; });
+
+    precise_vector_.Encrypt(relu_data);
+
+    result = precise_vector_.ReLU(11).Decrypt();
+
+    ASSERT_EQ(result.size(), relu_data.size());
+    for (unsigned i = 0; i < relu_data.size(); ++i) {
+        if (relu_data[i] < 0) {
+            ASSERT_NEAR(result[i], 0, epsilon_);
+        }
+        else {
+            ASSERT_NEAR(result[i], relu_data[i], epsilon_);
         }
     }
 }

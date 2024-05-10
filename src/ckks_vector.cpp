@@ -34,7 +34,29 @@ void CkksVector::Bootstrap() {
     }
 }
 
-CkksVector CkksVector::GetSignUsingPolyComp() const {
+CkksVector CkksVector::ReLU(unsigned degree) const {
+    CkksVector result;
+    switch (degree) {
+        case 4:
+            result = EvalPoly(fhenom::kG1Coeffs);
+            result = result.EvalPoly(fhenom::kF1Coeffs);
+            break;
+        case 11:
+            result = EvalPoly(fhenom::kG3Coeffs);
+            result = result.EvalPoly(fhenom::kG4Coeffs);
+            result = result.EvalPoly(fhenom::kF7Coeffs);
+            break;
+        default:
+            spdlog::error("ReLU of degree {} not implemented.", degree);
+            throw std::invalid_argument("ReLU of degree not implemented.");
+    }
+
+    // (1/2) * (x + x * sign(x))
+    result = (*this + *this * (result)) * std::vector<double>(this->size(), 0.5);
+    return result;
+}
+
+CkksVector CkksVector::EvalPoly(const std::vector<double>& coefficients) const {
     auto crypto_context = context_.GetCryptoContext();
 
     if (size() == 0) {
@@ -44,14 +66,27 @@ CkksVector CkksVector::GetSignUsingPolyComp() const {
 
     std::vector<Ctxt> result(data_.size());
     for (unsigned i = 0; i < data_.size(); ++i) {
-        result[i] = crypto_context->EvalPoly(data_[i], fhenom::kG3Coeffs);
-        result[i] = crypto_context->EvalPoly(result[i], fhenom::kG3Coeffs);
-        result[i] = crypto_context->EvalPoly(result[i], fhenom::kG3Coeffs);
-        result[i] = crypto_context->EvalPoly(result[i], fhenom::kF3Coeffs);
-        result[i] = crypto_context->EvalPoly(result[i], fhenom::kF3Coeffs);
+        result[i] = crypto_context->EvalPoly(data_[i], coefficients);
     }
 
     return CkksVector{result, numElements_, context_};
+}
+
+CkksVector CkksVector::GetSignUsingPolyComp() const {
+    auto crypto_context = context_.GetCryptoContext();
+
+    if (size() == 0) {
+        spdlog::warn("Data is empty. Nothing to compare.");
+        throw std::invalid_argument("Data is empty. Nothing to compare.");
+    }
+
+    CkksVector result = EvalPoly(fhenom::kG3Coeffs);
+    result            = result.EvalPoly(fhenom::kG3Coeffs);
+    result            = result.EvalPoly(fhenom::kG3Coeffs);
+    result            = result.EvalPoly(fhenom::kF3Coeffs);
+    result            = result.EvalPoly(fhenom::kF3Coeffs);
+
+    return result;
 }
 
 CkksVector CkksVector::GetSignUsingChebyshev(const double lower_bound, const double upper_bound,

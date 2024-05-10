@@ -57,6 +57,22 @@ public:
     void Bootstrap();
 
     /**
+     * @brief Rectified linear unit (ReLU) activation function
+     * 
+     * @param degree The degree of the approximation (4 or 11)
+     * @return CkksVector the ReLU of the vector
+     */
+    CkksVector ReLU(unsigned degree = 4) const;
+
+    /**
+     * @brief Evaluate a polynomial on the vector elements
+     * 
+     * @param coeffs The coefficients in decreasing degree
+     * @return CkksVector the result of the polynomial evaluation
+     */
+    CkksVector EvalPoly(const std::vector<double>& coefficients) const;
+
+    /**
      * @brief Evaluates the sign in each slot of the vector
      *
      * @return CkksVector A vector with -1 in negative slots, 0 in 0 slots, and 1
