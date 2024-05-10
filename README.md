@@ -1,9 +1,8 @@
 # FHEnom
-Tasty FHE machine learning library.
+FHEnom is a phenomenal fully homomorphic encryption machine learning library, designed to simplify tools for building securing machine learning and synthetic data generation models.  This library is based on OpenFHE.
 
-This library is a collection of FHE machine learning algorithms based on OpenFHE.
-
-Note: this library is still in development. It is full of bugs and incomplete features.
+> [!WARNING]
+> This library is still in development. It is full of bugs and incomplete features.
 
 # Getting Started
 
@@ -11,7 +10,7 @@ Note: this library is still in development. It is full of bugs and incomplete fe
 
 FHEnom is implemented as a CMake project and can be installed by either compiling and installing the library on your system, or using CMake's FetchContent package and including it in your project.
 
-### Use find_package
+### Installing with find_package
 
 #### Clone this repository:
 
@@ -43,7 +42,7 @@ Add the following lines to your CMakeLists.txt:
 find_package(FHEnom REQUIRED)
 ```
 
-### Use FetchContent
+### Installing with FetchContent
 
 Add the following lines to your project's CMakeLists.txt:
 
