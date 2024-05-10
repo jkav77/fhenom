@@ -1,4 +1,5 @@
-#include "fhenom/ckks_vector.h"
+#include <fhenom/ckks_vector.h>
+#include "coefficients.h"
 
 #include <openfhe.h>
 
@@ -43,11 +44,11 @@ CkksVector CkksVector::GetSignUsingPolyComp() const {
 
     std::vector<Ctxt> result(data_.size());
     for (unsigned i = 0; i < data_.size(); ++i) {
-        result[i] = crypto_context->EvalPoly(data_[i], fhenom::g3_coeffs);
-        result[i] = crypto_context->EvalPoly(result[i], fhenom::g3_coeffs);
-        result[i] = crypto_context->EvalPoly(result[i], fhenom::g3_coeffs);
-        result[i] = crypto_context->EvalPoly(result[i], fhenom::f3_coeffs);
-        result[i] = crypto_context->EvalPoly(result[i], fhenom::f3_coeffs);
+        result[i] = crypto_context->EvalPoly(data_[i], fhenom::kG3Coeffs);
+        result[i] = crypto_context->EvalPoly(result[i], fhenom::kG3Coeffs);
+        result[i] = crypto_context->EvalPoly(result[i], fhenom::kG3Coeffs);
+        result[i] = crypto_context->EvalPoly(result[i], fhenom::kF3Coeffs);
+        result[i] = crypto_context->EvalPoly(result[i], fhenom::kF3Coeffs);
     }
 
     return CkksVector{result, numElements_, context_};
