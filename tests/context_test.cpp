@@ -16,16 +16,9 @@ protected:
     Context fhe_context_;
     ContextTest() {
         spdlog::set_level(spdlog::level::debug);
-        using lbcrypto::FIXEDAUTO;
-        using lbcrypto::FLEXIBLEAUTOEXT;
-        using lbcrypto::HEStd_128_classic;
-        using lbcrypto::HYBRID;
-        using lbcrypto::ScalingTechnique;
-        using lbcrypto::SecurityLevel;
-        using lbcrypto::UNIFORM_TERNARY;
 
         if (!std::filesystem::exists(test_data_dir_)) {
-            fhe_context_ = GetFheContext();
+            fhe_context_ = get_fhe_context();
             fhe_context_.GenerateKeys();
             fhe_context_.GenerateBootstrapKeys();
             auto fhe_dir = test_data_dir_ / "fhe";
@@ -33,7 +26,7 @@ protected:
             fhe_context_.SavePublicKey(fhe_dir / "key-public.txt");
             fhe_context_.SaveSecretKey(fhe_dir / "key-secret.txt");
 
-            context_ = GetLeveledContext();
+            context_ = get_leveled_context();
             context_.GenerateKeys();
             context_.GenerateSumKey();
             context_.GenerateRotateKeys({-1, 1, -3, 3});
@@ -99,7 +92,7 @@ TEST_F(ContextTest, SaveEvalMultKeys) {
 }
 
 TEST_F(ContextTest, GenerateBootstrapKeys) {
-    auto fhe_context    = GetFheContext();
+    auto fhe_context    = get_fhe_context();
     auto crypto_context = fhe_context.GetCryptoContext();
     crypto_context->ClearEvalAutomorphismKeys();
     ASSERT_EQ(crypto_context->GetAllEvalAutomorphismKeys().size(), 0);

@@ -11,6 +11,9 @@ using fhenom::CkksVector;
 
 class CkksVectorTest : public ::testing::Test {
 protected:
+    fhenom::Context context_;
+    fhenom::Context precise_context_;
+    fhenom::Context fhe_context_;
     const std::vector<double> test_data_{0, 1, -1, 16, -16, 5, 50, 2, 10, 1, 2, 3, 4, 5, 17};
     const std::vector<double> testDomain_{0, 1, 2, 4, 8, 16, 32, 64, 96, 100};
     const std::filesystem::path test_data_dir_{"testData/ckks_vector"};
@@ -29,79 +32,70 @@ protected:
 
     double epsilon_ = 0.01;
 
-    CkksVector ckks_vector_, precise_vector_;
+    CkksVector ckks_vector_, precise_vector_, fhe_vector_;
     CkksVectorTest() {
         spdlog::set_level(spdlog::level::debug);
-        fhenom::Context context;
-        fhenom::Context precise_context;
 
         if (std::filesystem::exists(test_data_dir_)) {
             spdlog::debug("Saved test data found, loading...");
-            context.Load("testData/ckks_vector");
-            context.LoadPublicKey("testData/ckks_vector/key-public.txt");
-            context.LoadSecretKey("testData/ckks_vector/key-secret.txt");
-            ckks_vector_.SetContext(context);
+            context_.Load("testData/ckks_vector");
+            context_.LoadPublicKey("testData/ckks_vector/key-public.txt");
+            context_.LoadSecretKey("testData/ckks_vector/key-secret.txt");
+
+            ckks_vector_.SetContext(context_);
             ckks_vector_.Load(test_data_dir_ / "data.txt");
 
-            precise_context.Load(test_data_dir_ / "precise");
-            precise_context.LoadRotationKeys(test_data_dir_ / "precise" / "key-rotate.txt");
-            precise_context.LoadPublicKey(test_data_dir_ / "precise" / "key-public.txt");
-            precise_context.LoadSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
-            precise_vector_.SetContext(precise_context);
+            precise_context_.Load(test_data_dir_ / "precise");
+            precise_context_.LoadRotationKeys(test_data_dir_ / "precise" / "key-rotate.txt");
+            precise_context_.LoadPublicKey(test_data_dir_ / "precise" / "key-public.txt");
+            precise_context_.LoadSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
+
+            precise_vector_.SetContext(precise_context_);
             precise_vector_.Load(test_data_dir_ / "precise" / "data.txt");
+
+            fhe_context_.Load(test_data_dir_ / "fhe");
+            fhe_context_.LoadRotationKeys(test_data_dir_ / "fhe" / "key-rotate.txt");
+            fhe_context_.LoadPublicKey(test_data_dir_ / "fhe" / "key-public.txt");
+            fhe_context_.LoadSecretKey(test_data_dir_ / "fhe" / "key-secret.txt");
+
+            fhe_vector_.SetContext(fhe_context_);
+            fhe_vector_.Load(test_data_dir_ / "fhe" / "data.txt");
         }
         else {
             spdlog::debug("No saved test data found, generating new data...");
-            lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ckks_parameters;
-            ckks_parameters.SetMultiplicativeDepth(multDepth_);
-            ckks_parameters.SetScalingModSize(scaleModSize_);
-            ckks_parameters.SetFirstModSize(firstModSize_);
-            // ckksParameters.SetScalingTechnique(scTech);
-            ckks_parameters.SetSecurityLevel(sl_);
-            ckks_parameters.SetRingDim(ringDim_);
-            // ckksParameters.SetBatchSize(batchSize);
-            ckks_parameters.SetSecretKeyDist(lbcrypto::UNIFORM_TERNARY);
-            ckks_parameters.SetKeySwitchTechnique(lbcrypto::HYBRID);
-            ckks_parameters.SetNumLargeDigits(2);
-            context = fhenom::Context{ckks_parameters};
+            context_ = get_leveled_context();
+            context_.GenerateKeys();
+            context_.GenerateRotateKeys(rotation_indices_);
+            context_.Save(test_data_dir_);
+            context_.SavePublicKey(test_data_dir_ / "key-public.txt");
+            context_.SaveSecretKey(test_data_dir_ / "key-secret.txt");
 
-            context.GenerateKeys();
-            context.GenerateRotateKeys(rotation_indices_);
-
-            lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> precise_params;
-            precise_params.SetMultiplicativeDepth(24);
-            precise_params.SetScalingModSize(50);
-            precise_params.SetFirstModSize(60);
-            precise_params.SetSecurityLevel(sl_);
-            precise_params.SetRingDim(65536);
-            precise_params.SetSecretKeyDist(lbcrypto::UNIFORM_TERNARY);
-            precise_params.SetKeySwitchTechnique(lbcrypto::HYBRID);
-            precise_params.SetNumLargeDigits(3);
-            precise_context = fhenom::Context{precise_params};
-
-            precise_context.GenerateKeys();
-            precise_context.GenerateSumKey();
-            precise_context.GenerateRotateKeys(rotation_indices_);
-
-            std::filesystem::create_directories(test_data_dir_);
-            context.Save(test_data_dir_);
-            context.SaveRotationKeys(test_data_dir_ / "key-rotate.txt");
-            context.SavePublicKey(test_data_dir_ / "key-public.txt");
-            context.SaveSecretKey(test_data_dir_ / "key-secret.txt");
-
-            ckks_vector_.SetContext(context);
+            ckks_vector_.SetContext(context_);
             ckks_vector_.Encrypt(test_data_);
             ckks_vector_.Save(test_data_dir_ / "data.txt");
 
-            std::filesystem::create_directories(test_data_dir_ / "precise");
-            precise_context.Save(test_data_dir_ / "precise");
-            precise_context.SaveRotationKeys(test_data_dir_ / "precise" / "key-rotate.txt");
-            precise_context.SavePublicKey(test_data_dir_ / "precise" / "key-public.txt");
-            precise_context.SaveSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
+            precise_context_ = get_high_mult_depth_leveled_context();
+            precise_context_.GenerateKeys();
+            precise_context_.GenerateSumKey();
+            precise_context_.GenerateRotateKeys(rotation_indices_);
+            precise_context_.Save(test_data_dir_ / "precise");
+            precise_context_.SavePublicKey(test_data_dir_ / "precise" / "key-public.txt");
+            precise_context_.SaveSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
 
-            precise_vector_.SetContext(precise_context);
+            precise_vector_.SetContext(precise_context_);
             precise_vector_.Encrypt(test_data_);
             precise_vector_.Save(test_data_dir_ / "precise" / "data.txt");
+
+            fhe_context_ = get_fhe_context();
+            fhe_context_.GenerateKeys();
+            fhe_context_.GenerateBootstrapKeys();
+            fhe_context_.Save(test_data_dir_ / "fhe");
+            fhe_context_.SavePublicKey(test_data_dir_ / "fhe" / "key-public.txt");
+            fhe_context_.SaveSecretKey(test_data_dir_ / "fhe" / "key-secret.txt");
+
+            fhe_vector_.SetContext(fhe_context_);
+            fhe_vector_.Encrypt(test_data_);
+            fhe_vector_.Save(test_data_dir_ / "fhe" / "data.txt");
         }
     }
 };
@@ -139,9 +133,10 @@ TEST_F(CkksVectorTest, Decrypt) {
 // Homomorphic Operations
 
 TEST_F(CkksVectorTest, Bootstrap) {
-    ckks_vector_.Encrypt(test_data_);
-    ckks_vector_.Bootstrap();
-    SUCCEED();
+    fhe_vector_.GetSignUsingPolyComp();
+    spdlog::debug("Ciphertext level before bootstrap: {}", fhe_vector_.GetData()[0]->GetLevel());
+    fhe_vector_.Bootstrap();
+    spdlog::debug("Ciphertext level after bootstrap: {}", fhe_vector_.GetData()[0]->GetLevel());
 }
 
 TEST_F(CkksVectorTest, GetSign) {

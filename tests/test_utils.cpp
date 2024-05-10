@@ -1,6 +1,6 @@
 #include <fhenom/context.h>
 
-fhenom::Context GetFheContext() {
+fhenom::Context get_fhe_context() {
     lbcrypto::ScalingTechnique fhe_sc_tech = lbcrypto::FLEXIBLEAUTO;
     uint32_t fhe_scale_mod_size            = 59;
     uint32_t fhe_first_mod_size            = 60;
@@ -24,14 +24,14 @@ fhenom::Context GetFheContext() {
     return fhe_context;
 }
 
-fhenom::Context GetLeveledContext() {
+fhenom::Context get_leveled_context() {
     // ScalingTechnique sc_tech = FIXEDAUTO;
     lbcrypto::ScalingTechnique sc_tech = lbcrypto::FLEXIBLEAUTO;
     uint32_t mult_depth                = 2;
     if (sc_tech == lbcrypto::FLEXIBLEAUTOEXT)
         mult_depth += 1;
-    uint32_t scale_mod_size    = 24;
-    uint32_t first_mod_size    = 30;
+    uint32_t scale_mod_size    = 30;
+    uint32_t first_mod_size    = 36;
     uint32_t ring_dim          = 8192;
     lbcrypto::SecurityLevel sl = lbcrypto::HEStd_128_classic;
 
@@ -49,4 +49,18 @@ fhenom::Context GetLeveledContext() {
     fhenom::Context context{ckks_parameters};
 
     return context;
+}
+
+fhenom::Context get_high_mult_depth_leveled_context() {
+    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> precise_params;
+    precise_params.SetMultiplicativeDepth(24);
+    precise_params.SetScalingModSize(50);
+    precise_params.SetFirstModSize(60);
+    precise_params.SetSecurityLevel(lbcrypto::HEStd_128_classic);
+    precise_params.SetRingDim(65536);
+    precise_params.SetSecretKeyDist(lbcrypto::UNIFORM_TERNARY);
+    precise_params.SetKeySwitchTechnique(lbcrypto::HYBRID);
+    precise_params.SetNumLargeDigits(3);
+    fhenom::Context precise_context{precise_params};
+    return precise_context;
 }

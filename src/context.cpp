@@ -81,6 +81,10 @@ void Context::Load(const std::filesystem::path& path) {
     if (std::filesystem::exists(path / "key-rotate.txt")) {
         LoadRotationKeys(path / "key-rotate.txt");
     }
+
+    if (crypto_context_->GetScheme()->IsFeatureEnabled(lbcrypto::FHE)) {
+        crypto_context_->EvalBootstrapSetup({4, 4});
+    }
 }
 
 void Context::Save(const std::filesystem::path& path) const {
