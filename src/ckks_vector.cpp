@@ -34,21 +34,62 @@ void CkksVector::Bootstrap() {
     }
 }
 
-CkksVector CkksVector::ReLU(unsigned degree) const {
+CkksVector CkksVector::ReLU(unsigned depth) const {
     CkksVector result;
-    switch (degree) {
+    switch (depth) {
+        case 3:
+            return EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 7);
+            break;
         case 4:
-            result = EvalPoly(fhenom::kG1Coeffs);
-            result = result.EvalPoly(fhenom::kF1Coeffs);
+            return EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 13);
+            break;
+        case 10:
+            return EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 1023);
             break;
         case 11:
-            result = EvalPoly(fhenom::kG3Coeffs);
-            result = result.EvalPoly(fhenom::kG4Coeffs);
-            result = result.EvalPoly(fhenom::kF7Coeffs);
+            return EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 2047);
+            break;
+        case 12:
+            return EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 4095);
             break;
         default:
-            spdlog::error("ReLU of degree {} not implemented.", degree);
-            throw std::invalid_argument("ReLU of degree not implemented.");
+            spdlog::error("ReLU of depth {} not implemented.", depth);
+            throw std::invalid_argument("ReLU of depth not implemented.");
     }
 
     // (1/2) * (x + x * sign(x))
@@ -67,6 +108,23 @@ CkksVector CkksVector::EvalPoly(const std::vector<double>& coefficients) const {
     std::vector<Ctxt> result(data_.size());
     for (unsigned i = 0; i < data_.size(); ++i) {
         result[i] = crypto_context->EvalPoly(data_[i], coefficients);
+    }
+
+    return CkksVector{result, numElements_, context_};
+}
+
+CkksVector CkksVector::EvalChebyshev(const std::function<double(double)>& func, const double lower_bound,
+                                     const double upper_bound, uint32_t degree) const {
+    auto crypto_context = context_.GetCryptoContext();
+
+    if (size() == 0) {
+        spdlog::warn("Data is empty. Cannot evaluate Chebyshev on empty data.");
+        throw std::invalid_argument("Data is empty. Cannot evaluate Chebyshev on empty data.");
+    }
+
+    std::vector<Ctxt> result(data_.size());
+    for (unsigned i = 0; i < data_.size(); ++i) {
+        result[i] = crypto_context->EvalChebyshevFunction(func, data_[i], lower_bound, upper_bound, degree);
     }
 
     return CkksVector{result, numElements_, context_};

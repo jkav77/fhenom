@@ -59,10 +59,10 @@ public:
     /**
      * @brief Rectified linear unit (ReLU) activation function
      * 
-     * @param degree The degree of the approximation (4 or 11)
+     * @param depth The depth of the approximation (4 or 11)
      * @return CkksVector the ReLU of the vector
      */
-    CkksVector ReLU(unsigned degree = 4) const;
+    CkksVector ReLU(unsigned depth = 4) const;
 
     /**
      * @brief Evaluate a polynomial on the vector elements
@@ -71,6 +71,18 @@ public:
      * @return CkksVector the result of the polynomial evaluation
      */
     CkksVector EvalPoly(const std::vector<double>& coefficients) const;
+
+    /**
+     * @brief Evaluate a Chebyshev approximation of a function
+     * 
+     * @param func The function to approximate
+     * @param lower_bound the lower limit of the domain
+     * @param upper_bound the upper limit of the domain
+     * @param degree the degree of the approximation
+     * @return CkksVector The result of applying the approximation
+     */
+    CkksVector EvalChebyshev(const std::function<double(double)>& func, const double lower_bound = -1,
+                             const double upper_bound = 1, unsigned degree = 4095) const;
 
     /**
      * @brief Evaluates the sign in each slot of the vector

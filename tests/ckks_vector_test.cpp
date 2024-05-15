@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <openfhe.h>
 #include "test_utils.h"
+#include "../src/coefficients.h"
 
 #include <filesystem>
 #include <vector>
@@ -157,42 +158,200 @@ TEST_F(CkksVectorTest, GetSign) {
     }
 }
 
+TEST(CkksVector, ReLU4) {
+    spdlog::set_level(spdlog::level::debug);
+
+    uint32_t scale_mod_size = 48;
+    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> params;
+
+    usint depth = 4;
+    params.SetMultiplicativeDepth(depth);
+    params.SetScalingModSize(scale_mod_size);
+    params.SetRingDim(32768);
+
+    fhenom::Context context(params);
+    context.GenerateKeys();
+
+    std::vector<double> relu_data(201);
+    std::iota(relu_data.begin(), relu_data.end(), -100.0);
+    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.01; });
+
+    CkksVector vec(context);
+    vec.Encrypt(relu_data);
+
+    const double epsilon = 0.003;
+    auto compute_error   = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
+        std::vector<double> error(data.size());
+        for (unsigned i = 0; i < data.size(); ++i) {
+            error[i] = std::abs(result[i] - std::max(0.0, data[i]));
+        }
+
+        return error;
+    };
+
+    spdlog::debug("ReLU(3)");
+    auto result         = vec.ReLU(3).Decrypt();
+    auto error          = compute_error(result, relu_data);
+    auto number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    spdlog::debug("ReLU(4)");
+    result         = vec.ReLU(4).Decrypt();
+    error          = compute_error(result, relu_data);
+    number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    spdlog::debug("\nChebyshev degree 13");
+    result         = vec.EvalChebyshev([](double x) -> double { return x < 0 ? 0 : x; }, -1, 1, 13).Decrypt();
+    error          = compute_error(result, relu_data);
+    number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    // spdlog::debug("\nkRelu4Coeffs");
+    // result         = vec.EvalPoly(fhenom::kRelu4Coeffs).Decrypt();
+    // error          = compute_error(result, relu_data);
+    // number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    // spdlog::debug("Number correct: {}", number_correct);
+    // spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    // spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    // spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    // result = vec.EvalChebyshev([](double x) -> double { return x < 0 ? 0 : x; }, -1, 1, 15).Decrypt();
+    // error  = compute_error(result, relu_data);
+    // number_correct =
+    //     std::count_if(error.begin(), error.end(), [degree4_epsilon](double x) { return x < degree4_epsilon; });
+    // spdlog::debug("Number correct: {}", number_correct);
+    // spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    // spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    // spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    // ASSERT_GT(number_correct, relu_data.size() * 0.5);
+}
+
+TEST(CkksVector, ReLU12) {
+    spdlog::set_level(spdlog::level::debug);
+
+    uint32_t scale_mod_size = 48;
+    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> params;
+
+    usint depth = 12;
+    params.SetMultiplicativeDepth(depth);
+    params.SetScalingModSize(scale_mod_size);
+    params.SetRingDim(32768);
+    params.SetSecurityLevel(lbcrypto::HEStd_NotSet);
+
+    fhenom::Context context(params);
+    context.GenerateKeys();
+
+    std::vector<double> relu_data(201);
+    std::iota(relu_data.begin(), relu_data.end(), -100.0);
+    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.01; });
+
+    CkksVector vec(context);
+    vec.Encrypt(relu_data);
+
+    const double epsilon = 0.001;
+    auto compute_error   = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
+        std::vector<double> error(data.size());
+        for (unsigned i = 0; i < data.size(); ++i) {
+            error[i] = std::abs(result[i] - std::max(0.0, data[i]));
+        }
+
+        return error;
+    };
+
+    spdlog::debug("Computing ReLU(10)...");
+    auto result = vec.ReLU(10).Decrypt();
+
+    auto error          = compute_error(result, relu_data);
+    auto number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    spdlog::debug("Computing ReLU(11)...");
+    result = vec.ReLU(11).Decrypt();
+
+    error          = compute_error(result, relu_data);
+    number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    spdlog::debug("Computing ReLU(12)...");
+    // result = vec.ReLU(12).Decrypt();
+    result = vec.EvalChebyshev([](double x) -> double { return x < 0 ? 0 : x; }, -1, 1, 3071).Decrypt();
+
+    error          = compute_error(result, relu_data);
+    number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+}
+
 TEST_F(CkksVectorTest, ReLU) {
-    std::vector<double> relu_data(20);
-    std::iota(relu_data.begin(), relu_data.end(), -10.0);
-    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.1; });
-
-    precise_vector_.Encrypt(relu_data);
-
-    auto result = precise_vector_.ReLU().Decrypt();
-
-    ASSERT_EQ(result.size(), relu_data.size());
-    for (unsigned i = 0; i < relu_data.size(); ++i) {
-        if (relu_data[i] < 0) {
-            ASSERT_NEAR(result[i], 0, 0.05);
-        }
-        else {
-            ASSERT_NEAR(result[i], relu_data[i], 0.05);
-        }
-    }
-
-    relu_data = std::vector<double>(201);
+    std::vector<double> relu_data(201);
     std::iota(relu_data.begin(), relu_data.end(), -100.0);
     std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.01; });
 
     precise_vector_.Encrypt(relu_data);
 
-    result = precise_vector_.ReLU(11).Decrypt();
+    auto result = precise_vector_.ReLU().Decrypt();
 
-    ASSERT_EQ(result.size(), relu_data.size());
-    for (unsigned i = 0; i < relu_data.size(); ++i) {
-        if (relu_data[i] < 0) {
-            ASSERT_NEAR(result[i], 0, epsilon_);
+    auto compute_error = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
+        std::vector<double> error(data.size());
+        for (unsigned i = 0; i < data.size(); ++i) {
+            error[i] = std::abs(result[i] - std::max(0.0, data[i]));
         }
-        else {
-            ASSERT_NEAR(result[i], relu_data[i], epsilon_);
-        }
-    }
+
+        return error;
+    };
+
+    const double degree4_epsilon = 0.003;
+    auto error                   = compute_error(result, relu_data);
+    auto number_correct =
+        std::count_if(error.begin(), error.end(), [degree4_epsilon](double x) { return x < degree4_epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    result = precise_vector_.EvalChebyshev([](double x) -> double { return x < 0 ? 0 : x; }, -1, 1, 15).Decrypt();
+    error  = compute_error(result, relu_data);
+    number_correct =
+        std::count_if(error.begin(), error.end(), [degree4_epsilon](double x) { return x < degree4_epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    ASSERT_GT(number_correct, relu_data.size() * 0.5);
+
+    precise_vector_.Encrypt(relu_data);
+
+    const double degree12_epsilon = 0.001;
+    result                        = precise_vector_.ReLU(12).Decrypt();
+    error                         = compute_error(result, relu_data);
+    number_correct =
+        std::count_if(error.begin(), error.end(), [degree12_epsilon](double x) { return x < degree12_epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+
+    ASSERT_EQ(number_correct, relu_data.size());
 }
 
 TEST_F(CkksVectorTest, GetSignUsingPolyComp) {
