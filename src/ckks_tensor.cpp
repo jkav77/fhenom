@@ -24,7 +24,7 @@ void CkksTensor::SetData(CkksVector data, shape_t shape) {
     shape_ = std::move(shape);
 }
 
-CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel) {
+CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias) {
     auto kernel_shape    = kernel.GetShape();
     auto kernel_size     = kernel_shape[2] * kernel_shape[3];
     auto num_channels    = kernel_shape[1];
@@ -38,6 +38,11 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel) {
     auto padding         = (kernel_num_rows - 1) / 2;
     // auto channels_per_ctxt = crypto_context->GetEncodingParams()->GetBatchSize() / channel_size;
     // auto num_ctxts         = num_filters / channels_per_ctxt;
+
+    if (bias.GetShape()[0] != num_filters) {
+        spdlog::error("Bias shape ({}) does not match number of filters ({})", bias.GetShape()[0], num_filters);
+        throw std::invalid_argument("Bias shape does not match number of filters");
+    }
 
     if (shape_.size() != 3) {
         spdlog::error("Image should have three dimensions (has {}): [channels, rows, cols]", shape_.size());
@@ -137,6 +142,7 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel) {
         // Zero out the other channels
         std::vector<double> filter_mask(num_channels * channel_size, 0);
         std::fill(filter_mask.begin(), filter_mask.begin() + channel_size, 1);
+        filter_output += bias.Get({filter_index});
         filter_output *= filter_mask;
         filter_output.SetNumElements(channel_size);
 

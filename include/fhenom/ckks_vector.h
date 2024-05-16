@@ -182,6 +182,14 @@ public:
     CkksVector& operator+=(const CkksVector& rhs);
 
     /**
+     * @brief Add a plaintext value to each element in the vector
+     * 
+     * @param rhs the plaintext value to add
+     * @return CkksVector& a reference to this object
+     */
+    CkksVector& operator+=(const double& rhs);
+
+    /**
      * @brief Elementwise subtraction
      *
      * @param rhs

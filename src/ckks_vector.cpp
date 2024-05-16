@@ -333,6 +333,16 @@ CkksVector& CkksVector::operator+=(const CkksVector& rhs) {
     return *this;
 }
 
+CkksVector& CkksVector::operator+=(const double& rhs) {
+    precomputedRotations_.clear();
+
+    for (auto& ctxt : data_) {
+        ctxt = context_.GetCryptoContext()->EvalAdd(ctxt, rhs);
+    }
+
+    return *this;
+}
+
 CkksVector& CkksVector::operator-=(const double& rhs) {
     precomputedRotations_.clear();
 

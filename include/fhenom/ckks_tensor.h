@@ -27,7 +27,7 @@ public:
    *
    * @note The kernel must have the same number of dimensions as the CkksTensor
    */
-    fhenom::CkksTensor Conv2D(const fhenom::Tensor& kernel);
+    fhenom::CkksTensor Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias);
 
     //////////////////////////////////////////////////////////////////////////////
     // Getters and Setters
