@@ -24,7 +24,7 @@ include_directories( SYSTEM ${OpenFHE_INCLUDE}/core/include )
 include_directories( SYSTEM ${OpenFHE_INCLUDE}/pke )
 include_directories( SYSTEM ${OpenFHE_INCLUDE}/binfhe )
 
-set( fhenom_src src/ckks_tensor.cpp src/ckks_vector.cpp src/context.cpp src/tensor.cpp )
+set( fhenom_src src/ckks_tensor.cpp src/ckks_vector.cpp src/context.cpp src/tensor.cpp src/utils.cpp )
 set( fhenom_headers include/fhenom/ckks_tensor.h include/fhenom/ckks_vector.h include/fhenom/context.h include/fhenom/tensor.h include/fhenom/common.h )
 
 add_library( ${PROJECT_NAME} SHARED ${fhenom_src} )

@@ -1,6 +1,7 @@
 #include <fhenom/ckks_tensor.h>
 #include <fhenom/tensor.h>
 #include "nlohmann/json.hpp"
+#include "../src/utils.h"
 
 #include "gtest/gtest.h"
 
@@ -42,22 +43,22 @@ protected:
     CkksTensorTest() {
         spdlog::set_level(spdlog::level::debug);
 
-        if (!std::filesystem::exists(test_data_dir_)) {
-            context_ = Context{GetParameters()};
-            context_.GenerateKeys();
-            context_.GenerateRotateKeys({-1, -2, -4, -8, -16, -32, -64, -128, -256, -512, -1024, -2048, -4096,
-                                         1,  2,  4,  8,  16,  32,  64,  128,  256,  512,  1024,  2048,  4096});
-            context_.Save(test_data_dir_);
-            context_.SaveRotationKeys(test_data_dir_ / "key-rotate.txt");
-            context_.SavePublicKey(test_data_dir_ / "key-public.txt");
-            context_.SaveSecretKey(test_data_dir_ / "key-secret.txt");
-        }
-        else {
-            context_.Load(test_data_dir_);
-            context_.LoadRotationKeys(test_data_dir_ / "key-rotate.txt");
-            context_.LoadPublicKey(test_data_dir_ / "key-public.txt");
-            context_.LoadSecretKey(test_data_dir_ / "key-secret.txt");
-        }
+        // if (!std::filesystem::exists(test_data_dir_)) {
+        context_ = Context{GetParameters()};
+        context_.GenerateKeys();
+        context_.GenerateRotateKeys({-1, -2, -4, -8, -16, -32, -64, -128, -256, -512, -1024, -2048, -4096,
+                                     1,  2,  4,  8,  16,  32,  64,  128,  256,  512,  1024,  2048,  4096});
+        // context_.Save(test_data_dir_);
+        //     context_.SaveRotationKeys(test_data_dir_ / "key-rotate.txt");
+        //     context_.SavePublicKey(test_data_dir_ / "key-public.txt");
+        //     context_.SaveSecretKey(test_data_dir_ / "key-secret.txt");
+        // }
+        // else {
+        //     context_.Load(test_data_dir_);
+        //     context_.LoadRotationKeys(test_data_dir_ / "key-rotate.txt");
+        //     context_.LoadPublicKey(test_data_dir_ / "key-public.txt");
+        //     context_.LoadSecretKey(test_data_dir_ / "key-secret.txt");
+        // }
 
         ckks_vector_.SetContext(context_);
         ckks_vector_.Encrypt(test_data_);
@@ -65,16 +66,12 @@ protected:
     }
 
     static lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> GetParameters() {
-        lbcrypto::ScalingTechnique sc_tech = lbcrypto::FLEXIBLEAUTOEXT;
-        uint32_t mult_depth                = 2;
-        if (sc_tech == lbcrypto::FLEXIBLEAUTOEXT)
-            mult_depth += 1;
-        uint32_t scale_mod_size    = 24;
-        uint32_t first_mod_size    = 30;
-        uint32_t ring_dim          = 8192;
-        lbcrypto::SecurityLevel sl = lbcrypto::HEStd_128_classic;
-        // uint32_t slots = 16;  // sparsely-packed
-        // uint32_t batchSize = slots;
+        lbcrypto::ScalingTechnique sc_tech = lbcrypto::FLEXIBLEAUTO;
+        uint32_t mult_depth                = 4;
+        uint32_t scale_mod_size            = 59;
+        uint32_t first_mod_size            = 60;
+        uint32_t ring_dim                  = 16384;
+        lbcrypto::SecurityLevel sl         = lbcrypto::HEStd_128_classic;
 
         lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ckks_parameters;
         ckks_parameters.SetMultiplicativeDepth(mult_depth);
@@ -250,7 +247,7 @@ std::vector<double> loadImage() {
     std::vector<unsigned char> buffer(3072);
     file.read(reinterpret_cast<char*>(buffer.data()), 3072);
     std::vector<double> image(3072);
-    std::transform(buffer.begin(), buffer.end(), image.begin(), [](unsigned char pixel) { return pixel / 255.0; });
+    std::transform(buffer.begin(), buffer.end(), image.begin(), [](unsigned char pixel) { return pixel / 127.5 - 1; });
     return image;
 }
 
@@ -258,25 +255,28 @@ std::pair<Tensor, Tensor> loadWeights() {
     std::filesystem::path filename = "./SmallCNN_weights.json";
     std::ifstream file(filename);
     auto model   = json::parse(file);
-    auto weights = Tensor(model["cnn.0"]["weights"], {16, 3, 3, 3});
-    auto bias    = Tensor(model["cnn.0"]["bias"], {16});
+    auto weights = Tensor(model["conv1"]["weights"], {16, 3, 3, 3});
+    auto bias    = Tensor(model["conv1"]["bias"], {16});
     return {weights, bias};
 }
 
-TEST_F(CkksTensorTest, ConvVaryingValues) {
+TEST_F(CkksTensorTest, RotateImages) {
     auto image = loadImage();
     ckks_vector_.Encrypt(image);
-    ckks_tensor_.SetData(ckks_vector_, {3, 32, 32});
-    std::vector<double> kernel_data(27);
-    for (int idx = 0; idx < 27; ++idx) {
-        kernel_data[idx] = (idx + 1) / 100.0;
-    }
-    Tensor kernel{kernel_data, {1, 3, 3, 3}};
-    auto result = ckks_tensor_.Conv2D(kernel, fhenom::Tensor{{0}, {1}});
-    ASSERT_EQ(result.GetShape(), (shape_t{1, 32, 32}));
+    auto rotated_images = fhenom::rotate_images(ckks_vector_, 9);
+    std::vector<std::vector<double>> decrypted(rotated_images.size(), std::vector<double>());
+    for (int i = 0; i < rotated_images.size(); ++i) {
+        decrypted[i] = rotated_images[i].Decrypt();
+        ASSERT_EQ(decrypted[i].size(), 3072);
 
-    auto decrypted_result = result.GetData().Decrypt();
-    ASSERT_NEAR(decrypted_result[0], 0.6312549, epsilon_);
+        auto rotation_amount = i - 4;
+        for (int j = 0; j < -rotation_amount; ++j) {
+            ASSERT_NEAR(decrypted[i][j], 0, 1e-5);
+        }
+        for (int j = 1; j <= rotation_amount; ++j) {
+            ASSERT_NEAR(decrypted[i][3072 - j], 0, 1e-5);
+        }
+    }
 }
 
 TEST_F(CkksTensorTest, Conv2DCifar10) {
@@ -288,5 +288,5 @@ TEST_F(CkksTensorTest, Conv2DCifar10) {
     ASSERT_EQ(result.GetShape(), (shape_t{16, 32, 32}));
 
     auto decrypted_result = result.GetData().Decrypt();
-    ASSERT_NEAR(decrypted_result[0], -0.0804625, 0.001);
+    ASSERT_NEAR(decrypted_result[0], -0.6053400635719299, 0.001);
 }

@@ -1,6 +1,7 @@
 #include <fhenom/ckks_tensor.h>
 #include <fhenom/ckks_vector.h>
 #include <spdlog/spdlog.h>
+#include "utils.h"
 
 #include <utility>
 
@@ -25,6 +26,13 @@ void CkksTensor::SetData(CkksVector data, shape_t shape) {
 }
 
 CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias) {
+    {
+        auto validation_result = validate_conv2d_input(kernel, bias, shape_);
+        if (!validation_result.first) {
+            throw std::invalid_argument(validation_result.second);
+        }
+    }
+
     auto kernel_shape    = kernel.GetShape();
     auto kernel_size     = kernel_shape[2] * kernel_shape[3];
     auto num_channels    = kernel_shape[1];
@@ -32,52 +40,12 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
     auto kernel_num_rows = kernel_shape[2];
     auto kernel_num_cols = kernel_shape[3];
     auto crypto_context  = data_.GetContext().GetCryptoContext();
-    auto rotation_range  = static_cast<unsigned>((kernel_size - 1) / 2);
     auto channel_size    = shape_[1] * shape_[2];
     auto data_num_cols   = shape_[2];
     auto padding         = (kernel_num_rows - 1) / 2;
-    // auto channels_per_ctxt = crypto_context->GetEncodingParams()->GetBatchSize() / channel_size;
-    // auto num_ctxts         = num_filters / channels_per_ctxt;
-
-    if (bias.GetShape()[0] != num_filters) {
-        spdlog::error("Bias shape ({}) does not match number of filters ({})", bias.GetShape()[0], num_filters);
-        throw std::invalid_argument("Bias shape does not match number of filters");
-    }
-
-    if (shape_.size() != 3) {
-        spdlog::error("Image should have three dimensions (has {}): [channels, rows, cols]", shape_.size());
-        throw std::invalid_argument("Image does not have three dimensions");
-    }
-
-    if (kernel_shape.size() != 4) {
-        spdlog::error(
-            "Kernel should have four dimensions (has {}): "
-            "[filters, channels, rows, cols]",
-            kernel_shape.size());
-        throw std::invalid_argument("Kernel does not have four dimensions");
-    }
-
-    if (num_channels != shape_[0]) {
-        spdlog::error(
-            "Kernel channel size ({}) does not match image channel size "
-            "({})",
-            kernel_shape[2], shape_[2]);
-        throw std::invalid_argument("Kernel channel size does not match image");
-    }
-
-    if (kernel_shape[2] != kernel_shape[3]) {
-        throw std::invalid_argument("Kernel is not square");
-    }
-
-    if (kernel_shape[2] % 2 == 0) {
-        throw std::invalid_argument("Kernel size must be odd (e.g. 3x3 or 5x5)");
-    }
 
     // Create rotated images, which will be reused for every filter
-    std::vector<fhenom::CkksVector> rotated_images(kernel_size);
-    for (int i = 0; i < kernel_size; ++i) {
-        rotated_images[i] = data_.Rotate(i - rotation_range);
-    }
+    auto rotated_images = rotate_images(data_, kernel_size);
 
     // The vector to hold the results of applying all filter convolutions
     CkksVector conv_output(data_.GetContext());
