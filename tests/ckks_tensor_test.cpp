@@ -1,7 +1,6 @@
 #include <fhenom/ckks_tensor.h>
 #include <fhenom/tensor.h>
 #include "nlohmann/json.hpp"
-#include "../src/utils.h"
 
 #include "gtest/gtest.h"
 

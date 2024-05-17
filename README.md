@@ -1,8 +1,8 @@
 # FHEnom
-FHEnom is a phenomenal fully homomorphic encryption machine learning library, designed to simplify tools for building securing machine learning and synthetic data generation models.  This library is based on OpenFHE.
+FHEnom is a phenomenal fully homomorphic encryption machine learning library based on OpenFHE. FHEnom is designed to simplify building secure machine learning and synthetic data generation models. 
 
 > [!WARNING]
-> This library is still in development. It is full of bugs and incomplete features.
+> This library is still in development. It is full of bugs and incomplete features. Use at your own risk.
 
 # Getting Started
 
