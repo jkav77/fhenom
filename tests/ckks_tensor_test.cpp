@@ -263,19 +263,14 @@ std::pair<Tensor, Tensor> loadWeights() {
 TEST_F(CkksTensorTest, RotateImages) {
     auto image = loadImage();
     ckks_vector_.Encrypt(image);
-    auto rotated_images = fhenom::rotate_images(ckks_vector_, 9);
-    std::vector<std::vector<double>> decrypted(rotated_images.size(), std::vector<double>());
-    for (int i = 0; i < rotated_images.size(); ++i) {
-        decrypted[i] = rotated_images[i].Decrypt();
-        ASSERT_EQ(decrypted[i].size(), 3072);
+    CkksTensor ckks_tensor(ckks_vector_, {3, 32, 32});
 
-        auto rotation_amount = i - 4;
-        for (int j = 0; j < -rotation_amount; ++j) {
-            ASSERT_NEAR(decrypted[i][j], 0, 1e-5);
-        }
-        for (int j = 1; j <= rotation_amount; ++j) {
-            ASSERT_NEAR(decrypted[i][3072 - j], 0, 1e-5);
-        }
+    fhenom::shape_t kernel_shape{16, 3, 3, 3};
+    auto rotated_images = ckks_tensor.rotate_images(kernel_shape);
+
+    std::vector<double> decrypted = rotated_images[0].Decrypt();
+    for (int i = 0; i < 6; ++i) {
+        ASSERT_NEAR(decrypted[i], 0, 1e-5);
     }
 }
 

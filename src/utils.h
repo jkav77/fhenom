@@ -6,5 +6,5 @@
 namespace fhenom {
 std::pair<bool, std::string> validate_conv2d_input(const fhenom::Tensor& kernel, const fhenom::Tensor& bias,
                                                    const fhenom::shape_t& shape);
-std::vector<fhenom::CkksVector> rotate_images(const fhenom::CkksVector& data, unsigned kernel_size);
+std::vector<fhenom::CkksVector> rotate_images(const fhenom::CkksVector& data, fhenom::shape_t kernel_shape);
 }  // namespace fhenom

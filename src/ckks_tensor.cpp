@@ -25,6 +25,25 @@ void CkksTensor::SetData(CkksVector data, shape_t shape) {
     shape_ = std::move(shape);
 }
 
+std::vector<fhenom::CkksVector> CkksTensor::rotate_images(const fhenom::shape_t& kernel_shape) {
+    auto kernel_num_rows = kernel_shape[2];
+    auto kernel_num_cols = kernel_shape[3];
+    auto kernel_size     = kernel_num_rows * kernel_num_cols;
+    auto data_num_cols   = shape_[2];
+    auto padding         = (kernel_num_rows - 1) / 2;
+
+    std::vector<fhenom::CkksVector> rotated_images(kernel_size);
+
+    for (int row = 0; row < kernel_num_rows; ++row) {
+        for (int col = 0; col < kernel_num_cols; ++col) {
+            rotated_images[row * kernel_num_cols + col] =
+                data_.Rotate((row - padding) * data_num_cols + (col - padding));
+        }
+    }
+
+    return rotated_images;
+}
+
 CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias) {
     {
         auto validation_result = validate_conv2d_input(kernel, bias, shape_);
@@ -45,7 +64,7 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
     auto padding         = (kernel_num_rows - 1) / 2;
 
     // Create rotated images, which will be reused for every filter
-    auto rotated_images = rotate_images(data_, kernel_size);
+    auto rotated_images = rotate_images(kernel_shape);
 
     // The vector to hold the results of applying all filter convolutions
     CkksVector conv_output(data_.GetContext());

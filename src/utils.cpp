@@ -48,12 +48,4 @@ std::pair<bool, std::string> validate_conv2d_input(const fhenom::Tensor& kernel,
     return {true, ""};
 }
 
-std::vector<fhenom::CkksVector> rotate_images(const fhenom::CkksVector& data, unsigned kernel_size) {
-    auto rotation_range = static_cast<unsigned>((kernel_size - 1) / 2);
-    std::vector<fhenom::CkksVector> rotated_images(kernel_size);
-    for (int i = 0; i < kernel_size; ++i) {
-        rotated_images[i] = data.Rotate(i - rotation_range);
-    }
-    return rotated_images;
-}
 }  // namespace fhenom

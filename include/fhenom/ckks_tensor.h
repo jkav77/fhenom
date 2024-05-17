@@ -40,5 +40,10 @@ public:
     }
 
     void SetData(fhenom::CkksVector data, shape_t shape);
+
+    //////////////////////////////////////////////////////////////////////////////
+    // Utility Functions
+
+    std::vector<CkksVector> rotate_images(const shape_t& kernel_shape);
 };
 }  // namespace fhenom
