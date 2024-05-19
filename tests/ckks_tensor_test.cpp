@@ -307,5 +307,71 @@ TEST_F(CkksTensorTest, AvgPool2D) {
     ASSERT_NEAR(decrypted[2048], expected_2_0_0, 0.001);
     ASSERT_NEAR(decrypted[800], 0, 0.001);
     ASSERT_NEAR(decrypted[1024 + 832], 0, 0.001);
-    ASSERT_NEAR(decrypted[2048 + 2048 - 32], 0, 0.001);
+    ASSERT_NEAR(decrypted[2048 - 32], 0, 0.001);
+
+    std::vector<double> new_image;
+    for (int i = 0; i < 11; ++i) {
+        std::copy(image.begin(), image.end(), std::back_inserter(new_image));
+    }
+
+    ckks_vector_.Encrypt(new_image);
+    ckks_tensor.SetData(ckks_vector_, {33, 32, 32});
+    ckks_tensor.AvgPool2D();
+}
+
+TEST_F(CkksTensorTest, GetIndex) {
+    auto image = loadImage();
+    ckks_vector_.Encrypt(image);
+    CkksTensor ckks_tensor(ckks_vector_, {3, 32, 32});
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 0}), 0);
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 1, 0}), 32);
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 1}), 1);
+    ASSERT_EQ(ckks_tensor.GetIndex({1, 0, 0}), 1024);
+    ASSERT_EQ(ckks_tensor.GetIndex({2, 0, 0}), 2048);
+    ASSERT_THROW(ckks_tensor.GetIndex({3, 0, 0}), std::invalid_argument);
+    ASSERT_THROW(ckks_tensor.GetIndex({0, 0, 32}), std::invalid_argument);
+    ASSERT_THROW(ckks_tensor.GetIndex({0, 32, 0}), std::invalid_argument);
+
+    ckks_tensor = ckks_tensor.AvgPool2D();
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 0}), 0);
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 1, 0}), 1);
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 1}), 2);
+    ASSERT_EQ(ckks_tensor.GetIndex({1, 0, 0}), 1024);
+    ASSERT_EQ(ckks_tensor.GetIndex({2, 0, 0}), 2048);
+    ASSERT_THROW(ckks_tensor.GetIndex({3, 0, 0}), std::invalid_argument);
+    ASSERT_THROW(ckks_tensor.GetIndex({0, 0, 16}), std::invalid_argument);
+    ASSERT_THROW(ckks_tensor.GetIndex({0, 16, 0}), std::invalid_argument);
+
+    std::vector<double> new_image;
+    for (int i = 0; i < 11; ++i) {
+        std::copy(image.begin(), image.end(), std::back_inserter(new_image));
+    }
+
+    ckks_vector_.Encrypt(new_image);
+    ckks_tensor.SetData(ckks_vector_, {33, 32, 32});
+    ckks_tensor.SetStripe(0);
+
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 0}), 0);
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 1, 0}), 32);
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 1}), 1);
+    ASSERT_EQ(ckks_tensor.GetIndex({1, 0, 0}), 1024);
+    ASSERT_EQ(ckks_tensor.GetIndex({2, 0, 0}), 2048);
+    ASSERT_EQ(ckks_tensor.GetIndex({3, 0, 0}), 3072);
+    ASSERT_EQ(ckks_tensor.GetIndex({14, 0, 0}), 14 * 1024);
+    ASSERT_THROW(ckks_tensor.GetIndex({33, 0, 0}), std::invalid_argument);
+    ASSERT_THROW(ckks_tensor.GetIndex({0, 0, 32}), std::invalid_argument);
+    ASSERT_THROW(ckks_tensor.GetIndex({0, 32, 0}), std::invalid_argument);
+
+    ckks_tensor = ckks_tensor.AvgPool2D();
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 0}), 0);
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 1, 0}), 1);
+    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 1}), 2);
+    ASSERT_EQ(ckks_tensor.GetIndex({1, 0, 0}), 1024);
+    ASSERT_EQ(ckks_tensor.GetIndex({2, 0, 0}), 2048);
+    ASSERT_EQ(ckks_tensor.GetIndex({3, 0, 0}), 3072);
+    ASSERT_EQ(ckks_tensor.GetIndex({7, 0, 0}), 1024 * 7);
+    ASSERT_EQ(ckks_tensor.GetIndex({32, 0, 0}), 256);
+    ASSERT_THROW(ckks_tensor.GetIndex({33, 0, 0}), std::invalid_argument);
+    ASSERT_THROW(ckks_tensor.GetIndex({0, 0, 16}), std::invalid_argument);
+    ASSERT_THROW(ckks_tensor.GetIndex({0, 16, 0}), std::invalid_argument);
 }

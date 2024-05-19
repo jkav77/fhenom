@@ -10,7 +10,7 @@ namespace fhenom {
 class CkksTensor {
     fhenom::CkksVector data_;
     fhenom::shape_t shape_;
-    unsigned stripe_{1};
+    unsigned stripe_{0};
 
 public:
     CkksTensor() : data_{}, shape_{0} {}
