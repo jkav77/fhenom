@@ -14,6 +14,7 @@ protected:
 public:
     Context() = default;
     Context(lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ccParams, bool enable_fhe = false);
+    Context(lbcrypto::CryptoContext<lbcrypto::DCRTPoly> crypto_context) : crypto_context_(crypto_context) {}
     Context(std::filesystem::path savedContextPath) {
         Load(savedContextPath);
     }

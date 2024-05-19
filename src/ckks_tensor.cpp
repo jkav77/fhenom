@@ -6,16 +6,22 @@
 
 using fhenom::CkksTensor;
 
-CkksTensor::CkksTensor(CkksVector data, shape_t shape) {
-    SetData(std::move(data), std::move(shape));
+CkksTensor::CkksTensor(CkksVector data, shape_t shape, bool sparse) {
+    SetData(std::move(data), std::move(shape), sparse);
 }
 
-void CkksTensor::SetData(CkksVector data, shape_t shape) {
+void CkksTensor::SetData(CkksVector data, shape_t shape, bool sparse) {
     unsigned len = 1;
     for (auto dim : shape) {
         len *= dim;
     }
-    if (data.size() != len) {
+    if (sparse) {
+        if (data.size() < len) {
+            spdlog::error("Data vector size ({}) is less than shape ({})", data.size(), len);
+            throw std::invalid_argument("Data vector size is less than shape");
+        }
+    }
+    else if (data.size() != len) {
         spdlog::error("Data vector size ({}) does not match shape ({})", data.size(), len);
         throw std::invalid_argument("Data vector size does not match shape");
     }
@@ -182,4 +188,65 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
     fhenom::shape_t conv_shape = {num_filters, shape_[1], shape_[2]};
     conv_output.SetNumElements(num_filters * channel_size);
     return CkksTensor(conv_output, conv_shape);
+}
+
+CkksTensor CkksTensor::AvgPool2D() {
+    auto crypto_context     = data_.GetContext().GetCryptoContext();
+    const auto channel_size = shape_[1] * shape_[2];
+    const auto batch_size   = crypto_context->GetEncodingParams()->GetBatchSize();
+
+    int row_shift = shape_[2];
+    int col_shift = stripe_;
+    if (stripe_ == 2) {
+        row_shift = 1;  // With two stripes, the rows to average are already adjacent
+    }
+
+    CkksVector output_data =
+        data_ + data_.Rotate(col_shift) + data_.Rotate(row_shift) + data_.Rotate(row_shift + col_shift);
+    output_data *= 0.25;
+
+    // Mask every other column in every other row
+    std::vector<double> mask(data_.size(), 0);
+    for (unsigned channel = 0; channel < shape_[0]; ++channel) {
+        for (unsigned row = 0; row < shape_[1]; ++row) {
+            for (unsigned col = 0; col < shape_[2]; ++col) {
+                if (row % 2 == 0) {
+                    mask[channel * channel_size + row * shape_[2] + col] = col % 2 == 0 ? 1 : 0;
+                }
+            }
+        }
+    }
+    output_data *= mask;
+
+    // Stripe the rows
+    output_data += output_data.Rotate(2 * shape_[2] - 1);
+    for (unsigned index = 0; index < data_.size(); ++index) {
+        mask[index] = (index / (shape_[2])) % 4 == 0 ? 1 : 0;
+    }
+    output_data *= mask;
+
+    // Condense ciphertexts
+    auto ctxts = output_data.GetData();
+    std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>> new_ctxts(ceil(static_cast<double>(ctxts.size()) / 4));
+    for (int index = 0; index < ctxts.size(); ++index) {
+        if (index % 4 == 0) {
+            new_ctxts[index / 4] = std::move(ctxts[index]);
+        }
+        else {
+            new_ctxts[index / 4] += crypto_context->EvalRotate(ctxts[index], -(index % 4) * shape_[2]);
+        }
+    }
+    output_data.SetData(new_ctxts, new_ctxts.size() * batch_size);
+
+    return CkksTensor(output_data, {shape_[0], shape_[1] / 2, shape_[2] / 2}, true);
+}
+
+unsigned CkksTensor::GetIndex(fhenom::shape_t position) const {
+    auto channel_size          = shape_[1] * shape_[2];
+    auto channel_block         = position[0] / 4;
+    auto channel_stripe_offset = position[0] % 4;
+    auto row_col_offset        = position[1] * shape_[2] + position[2];
+    unsigned index             = channel_block * channel_size + channel_stripe_offset + row_col_offset * stripe_;
+
+    return index;
 }

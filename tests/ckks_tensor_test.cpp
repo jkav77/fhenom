@@ -284,3 +284,28 @@ TEST_F(CkksTensorTest, Conv2DCifar10) {
     auto decrypted_result = result.GetData().Decrypt();
     ASSERT_NEAR(decrypted_result[0], -0.6053400635719299, 0.001);
 }
+
+TEST_F(CkksTensorTest, AvgPool2D) {
+    auto image = loadImage();
+    ckks_vector_.Encrypt(image);
+    CkksTensor ckks_tensor(ckks_vector_, {3, 32, 32});
+    auto result = ckks_tensor.AvgPool2D();
+    ASSERT_EQ(result.GetShape(), (shape_t{3, 16, 16}));
+
+    auto decrypted      = result.GetData().Decrypt();
+    auto top_left_avg   = (image[0] + image[1] + image[32] + image[33]) / 4;
+    auto expected_0_0_1 = (image[2] + image[3] + image[34] + image[35]) / 4;
+    auto expected_0_1_0 = (image[32 * 2] + image[32 * 2 + 1] + image[32 * 3] + image[32 * 3 + 1]) / 4;
+    auto expected_0_2_0 = (image[32 * 4] + image[32 * 4 + 1] + image[32 * 5] + image[32 * 5 + 1]) / 4;
+    auto expected_1_0_0 = (image[1024] + image[1024 + 1] + image[1024 + 32] + image[1024 + 32 + 1]) / 4;
+    auto expected_2_0_0 = (image[2048] + image[2048 + 1] + image[2048 + 32] + image[2048 + 32 + 1]) / 4;
+    ASSERT_NEAR(decrypted[0], top_left_avg, 0.001);
+    ASSERT_NEAR(decrypted[2], expected_0_0_1, 0.001);
+    ASSERT_NEAR(decrypted[1], expected_0_1_0, 0.001);
+    ASSERT_NEAR(decrypted[128], expected_0_2_0, 0.001);
+    ASSERT_NEAR(decrypted[1024], expected_1_0_0, 0.001);
+    ASSERT_NEAR(decrypted[2048], expected_2_0_0, 0.001);
+    ASSERT_NEAR(decrypted[800], 0, 0.001);
+    ASSERT_NEAR(decrypted[1024 + 832], 0, 0.001);
+    ASSERT_NEAR(decrypted[2048 + 2048 - 32], 0, 0.001);
+}

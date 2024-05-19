@@ -10,11 +10,12 @@ namespace fhenom {
 class CkksTensor {
     fhenom::CkksVector data_;
     fhenom::shape_t shape_;
+    unsigned stripe_{1};
 
 public:
     CkksTensor() : data_{}, shape_{0} {}
 
-    CkksTensor(fhenom::CkksVector data, fhenom::shape_t shape);
+    CkksTensor(fhenom::CkksVector data, fhenom::shape_t shape, bool sparse = false);
 
     //////////////////////////////////////////////////////////////////////////////
     // Homomorphic Operations
@@ -29,8 +30,19 @@ public:
    */
     fhenom::CkksTensor Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias);
 
+    /**
+     * @brief Apply average pooling to the CkksTensor
+     * 
+     * @return fhenom::CkksTensor the transformed tensor
+     * 
+     * @note This method only does average pooling with a 2x2 window
+     */
+    fhenom::CkksTensor AvgPool2D();
+
     //////////////////////////////////////////////////////////////////////////////
     // Getters and Setters
+
+    void SetData(fhenom::CkksVector data, shape_t shape, bool sparse = false);
 
     fhenom::CkksVector GetData() const {
         return data_;
@@ -39,7 +51,15 @@ public:
         return shape_;
     }
 
-    void SetData(fhenom::CkksVector data, shape_t shape);
+    void SetStripe(unsigned stripe) {
+        stripe_ = stripe;
+    }
+
+    unsigned GetStripe() const {
+        return stripe_;
+    }
+
+    unsigned GetIndex(fhenom::shape_t position) const;
 
     //////////////////////////////////////////////////////////////////////////////
     // Utility Functions
