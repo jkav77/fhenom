@@ -166,6 +166,14 @@ public:
     CkksVector& operator*=(const std::vector<double>& rhs);
 
     /**
+     * @brief Multiply every element in the vector by a scalar
+     * 
+     * @param rhs the scalar to multiply
+     * @return CkksVector& The modified vector
+     */
+    CkksVector& operator*=(const double& rhs);
+
+    /**
      * @brief Elementwise multiplication with a plaintext of equal size
      *
      * @param rhs The vector to multiply
@@ -220,14 +228,27 @@ public:
      */
     void Concat(const CkksVector& rhs);
 
-    /**
-     * @brief Create a vector consisting of the first slot of each of the parameter vectors
-     * 
-     * @param vectors A list of vectors to merge
-     * @return CkksVector A vector containing the first slot of each input vector in the slot that
-     * corresponds to the input vector index
-     */
-    static CkksVector Merge(const std::vector<CkksVector>& vectors);
+    // /**
+    //  * @brief Create a vector consisting of the first `num_elements` slots of each of the parameter vectors
+    //  *
+    //  * @param vectors A list of vectors to merge
+    //  * @param num_elements the number of elements to merge from each vector
+    //  * @return CkksVector A vector containing the first `num_elements` slots of each input vector in the slot
+    //  *
+    //  * @note This method assumes all vectors are already masked with zeroes outside the elements to merge.
+    //  */
+    // static CkksVector Merge(const std::vector<CkksVector>& vectors, unsigned num_elements = 1);
+    //
+    // /**
+    //  * @brief Create a vector consisting of the first `num_elements` slots of each of the parameter ciphertexts
+    //  *
+    //  * @param ctxts a list of ciphertexts to merge
+    //  * @param num_elements the number of elements to merge from each ciphertext
+    //  * @return CkksVector A vector containing the first `num_elements` slots of each input ciphertext
+    //  *
+    //  * @note This method assumes all ciphertexts are already masked with zeroes outside the elements to merge.
+    //  */
+    // static CkksVector Merge(const std::vector<Ctxt>& ctxts, unsigned num_elements = 1);
 
     ////////////////////////////////////////////////////////////////////////////
     // File I/O
@@ -276,7 +297,8 @@ public:
      * @param data The encrypted data
      */
     inline void SetData(const std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>& data, std::size_t numElements) {
-        this->data_ = std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(data.begin(), data.end());
+        this->data_        = std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(data.begin(), data.end());
+        this->numElements_ = numElements;
     }
 
     /**
@@ -318,6 +340,10 @@ inline fhenom::CkksVector operator*(fhenom::CkksVector lhs, const fhenom::CkksVe
 }
 
 inline fhenom::CkksVector operator*(fhenom::CkksVector lhs, const std::vector<double>& rhs) {
+    return lhs *= rhs;
+}
+
+inline fhenom::CkksVector operator*(fhenom::CkksVector lhs, const double& rhs) {
     return lhs *= rhs;
 }
 

@@ -54,13 +54,13 @@ protected:
             precise_vector_.SetContext(precise_context_);
             precise_vector_.Load(test_data_dir_ / "precise" / "data.txt");
 
-            fhe_context_.Load(test_data_dir_ / "fhe");
-            fhe_context_.LoadRotationKeys(test_data_dir_ / "fhe" / "key-rotate.txt");
-            fhe_context_.LoadPublicKey(test_data_dir_ / "fhe" / "key-public.txt");
-            fhe_context_.LoadSecretKey(test_data_dir_ / "fhe" / "key-secret.txt");
-
-            fhe_vector_.SetContext(fhe_context_);
-            fhe_vector_.Load(test_data_dir_ / "fhe" / "data.txt");
+            // fhe_context_.Load(test_data_dir_ / "fhe");
+            // fhe_context_.LoadRotationKeys(test_data_dir_ / "fhe" / "key-rotate.txt");
+            // fhe_context_.LoadPublicKey(test_data_dir_ / "fhe" / "key-public.txt");
+            // fhe_context_.LoadSecretKey(test_data_dir_ / "fhe" / "key-secret.txt");
+            //
+            // fhe_vector_.SetContext(fhe_context_);
+            // fhe_vector_.Load(test_data_dir_ / "fhe" / "data.txt");
         }
         else {
             spdlog::debug("No saved test data found, generating new data...");
@@ -134,6 +134,14 @@ TEST_F(CkksVectorTest, Decrypt) {
 // Homomorphic Operations
 
 TEST_F(CkksVectorTest, Bootstrap) {
+    fhe_context_.Load(test_data_dir_ / "fhe");
+    fhe_context_.LoadRotationKeys(test_data_dir_ / "fhe" / "key-rotate.txt");
+    fhe_context_.LoadPublicKey(test_data_dir_ / "fhe" / "key-public.txt");
+    fhe_context_.LoadSecretKey(test_data_dir_ / "fhe" / "key-secret.txt");
+
+    fhe_vector_.SetContext(fhe_context_);
+    fhe_vector_.Load(test_data_dir_ / "fhe" / "data.txt");
+
     fhe_vector_.GetSignUsingPolyComp();
     spdlog::debug("Ciphertext level before bootstrap: {}", fhe_vector_.GetData()[0]->GetLevel());
     fhe_vector_.Bootstrap();
@@ -590,6 +598,10 @@ TEST_F(CkksVectorTest, Addition) {
     test_vector += ckks_vector_;
     result = test_vector.Decrypt();
     ASSERT_NEAR(result[0], test_data_[0] * 3, epsilon_);
+
+    ckks_vector_ += ckks_vector_.Rotate(1);
+    result = ckks_vector_.Decrypt();
+    ASSERT_NEAR(result[0], test_data_[0] + test_data_[1], epsilon_);
 }
 
 TEST_F(CkksVectorTest, Concat) {

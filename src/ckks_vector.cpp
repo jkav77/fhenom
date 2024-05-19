@@ -283,7 +283,7 @@ CkksVector& CkksVector::operator*=(const std::vector<double>& rhs) {
         throw std::invalid_argument("Data is empty. Cannot multiply.");
     }
 
-    if (rhs.size() != size()) {
+    if (rhs.size() != size() && rhs.size() != batch_size * data_.size()) {
         spdlog::error("Cannot multiply vectors of different sizes.");
         throw std::invalid_argument("Cannot multiply vectors of different sizes.");
     }
@@ -296,6 +296,10 @@ CkksVector& CkksVector::operator*=(const std::vector<double>& rhs) {
     }
 
     return *this;
+}
+
+CkksVector& CkksVector::operator*=(const double& rhs) {
+    return this->operator*=(std::vector<double>(size(), rhs));
 }
 
 CkksVector& CkksVector::operator*=(const CkksVector& rhs) {
@@ -327,7 +331,7 @@ CkksVector& CkksVector::operator+=(const CkksVector& rhs) {
     precomputedRotations_.clear();
 
     for (unsigned i = 0; i < data_.size(); ++i) {
-        context_.GetCryptoContext()->EvalAddInPlace(data_[i], rhs.data_[i]);
+        data_[i] = context_.GetCryptoContext()->EvalAdd(data_[i], rhs.data_[i]);
     }
 
     return *this;
@@ -426,37 +430,86 @@ void CkksVector::Concat(const CkksVector& rhs) {
     numElements_ = size() + rhs.size();
 }
 
-CkksVector CkksVector::Merge(const std::vector<CkksVector>& vectors) {
-    if (vectors.empty()) {
-        spdlog::error("Cannot merge empty vectors.");
-        throw std::invalid_argument("Cannot merge empty vectors.");
-    }
+// CkksVector CkksVector::Merge(const std::vector<CkksVector>& vectors, unsigned num_elements) {
+//     if (vectors.empty()) {
+//         spdlog::error("Cannot merge empty vectors.");
+//         throw std::invalid_argument("Cannot merge empty vectors.");
+//     }
 
-    auto crypto_context = vectors[0].context_.GetCryptoContext();
+//     if (vectors.size() == 1) {
+//         return vectors[0];
+//     }
 
-    std::vector<double> mask(vectors[0].size(), 0);
-    mask[0]           = 1;
-    CkksVector result = vectors[0] * mask;
-    result.SetNumElements(1);
+//     auto crypto_context = vectors[0].context_.GetCryptoContext();
+//     auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
 
-    for (auto i = 1; i < vectors.size(); ++i) {
-        if (vectors[i].context_.GetCryptoContext() != crypto_context) {
-            spdlog::error("Cannot merge vectors with different contexts.");
-            throw std::invalid_argument("Cannot merge vectors with different contexts.");
-        }
+//     if (num_elements * vectors.size() > batch_size && batch_size % num_elements != 0) {
+//         spdlog::error("Batch size must be a multiple of the number of elements.");
+//         throw std::invalid_argument("Batch size must be a multiple of the number of elements.");
+//     }
 
-        mask    = std::vector<double>(vectors[i].size(), 0);
-        mask[0] = 1;
-        result  = result.Rotate(-1);
+//     if (num_elements > batch_size) {
+//         spdlog::error("Number of elements must be less than or equal to the batch size.");
+//         throw std::invalid_argument("Number of elements must be less than or equal to the batch size.");
+//     }
 
-        auto new_size = result.size() + 1;
-        result.SetNumElements(vectors[i].size());
-        result += vectors[i] * mask;
-        result.SetNumElements(new_size);
-    }
+//     auto num_merges_per_ctxt = batch_size / num_elements;
+//     std::vector<Ctxt> result_data;
 
-    return result;
-}
+//     for (int index = 0; index < vectors.size(); ++index) {
+//         auto ctxt_index = index % num_merges_per_ctxt;
+//         if (ctxt_index == 0) {
+//             result_data.push_back(vectors[index].data_[0]);
+//         }
+//         else {
+//             crypto_context->EvalAddInPlace(
+//                 result_data.back(), crypto_context->EvalRotate(vectors[index].data_[0], -ctxt_index * num_elements));
+//         }
+//     }
+
+//     return CkksVector(result_data, num_elements * vectors.size(), vectors[0].context_);
+// }
+
+// CkksVector CkksVector::Merge(const std::vector<Ctxt>& ctxts, unsigned num_elements) {
+//     if (ctxts.empty()) {
+//         spdlog::error("Cannot merge nothing.");
+//         throw std::invalid_argument("Cannot merge nothing.");
+//     }
+
+//     auto crypto_context = ctxts[0]->GetCryptoContext();
+//     Context context(crypto_context);
+//     if (ctxts.size() == 1) {
+//         return CkksVector(ctxts, num_elements, context);
+//     }
+
+//     auto batch_size = crypto_context->GetEncodingParams()->GetBatchSize();
+
+//     if (num_elements * ctxts.size() > batch_size && batch_size % num_elements != 0) {
+//         spdlog::error("Batch size must be a multiple of the number of elements.");
+//         throw std::invalid_argument("Batch size must be a multiple of the number of elements.");
+//     }
+
+//     if (num_elements > batch_size) {
+//         spdlog::error("Number of elements must be less than or equal to the batch size.");
+//         throw std::invalid_argument("Number of elements must be less than or equal to the batch size.");
+//     }
+
+//     auto num_merges_per_ctxt = batch_size / num_elements;
+//     std::vector<Ctxt> result_data;
+
+//     for (int index = 0; index < ctxts.size(); ++index) {
+//         auto ctxt_index = index % num_merges_per_ctxt;
+//         if (ctxt_index == 0) {
+//             result_data.push_back(ctxts[index]);
+//         }
+//         else {
+//             crypto_context->EvalAddInPlace(result_data.back(),
+//                                            crypto_context->EvalRotate(ctxts[index], -ctxt_index * num_elements));
+//         }
+//     }
+
+//     return CkksVector(result_data, num_elements * ctxts.size(), context);
+// }
 
 //////////////////////////////////////////////////////////////////////////////
 // Encryption and Decryption
