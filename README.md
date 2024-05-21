@@ -6,6 +6,22 @@ FHEnom is a phenomenal fully homomorphic encryption machine learning library bas
 
 # Getting Started
 
+## Compiling the tests
+
+```bash
+cmake -B build .
+cmake --build build --target tests -j
+```
+
+## Running the tests
+
+```bash
+./bin/ckks_tensor_test
+./bin/ckks_vector_test
+./bin/context_test
+./bin/tensor_test
+```
+
 ## Installing 
 
 FHEnom is implemented as a CMake project and can be installed by either compiling and installing the library on your system, or using CMake's FetchContent package and including it in your project.
