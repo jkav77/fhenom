@@ -191,59 +191,86 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
 }
 
 CkksTensor CkksTensor::AvgPool2D() {
-    auto crypto_context     = data_.GetContext().GetCryptoContext();
-    const auto channel_size = shape_[1] * shape_[2];
+    const auto crypto_context = data_.GetContext().GetCryptoContext();
+    const auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
 
-    int row_shift = shape_[2];
-    int col_shift = 1;
-    if (stripe_ == 1) {
-        row_shift = 1;  // With two stripes, the rows to average are already adjacent
-        col_shift = 2;
+    CkksVector output_data = data_;
+    std::vector<double> mask(output_data.GetData().size() * batch_size);
+
+    // Average
+    output_data += output_data.Rotate(1) + output_data.Rotate(shape_[2]) + output_data.Rotate(shape_[2] + 1);
+    for (int i = 0; i < mask.size(); ++i) {
+        mask[i] = (i / shape_[2]) % 2 == 0 && i % 2 == 0 ? 0.25 : 0;  // Every other column in every other row
+    }
+    output_data *= mask;
+
+    // Condense columns
+    for (int i = 0; i < log2(shape_[2]) - 1; ++i) {
+        output_data += output_data.Rotate(1 << i);
+        for (int j = 0; j < mask.size(); ++j) {
+            mask[j] = (j / shape_[2]) % 2 == 0 && j / (1 << (i + 1)) % 2 == 0 ? 1 : 0;
+        }
+        output_data *= mask;
     }
 
-    CkksVector output_data =
-        data_ + data_.Rotate(col_shift) + data_.Rotate(row_shift) + data_.Rotate(row_shift + col_shift);
-    output_data *= 0.25;
+    // Condense rows
+    shape_t new_shape{shape_[0], shape_[1] / 2, shape_[2] / 2};
+    for (int i = 0; i < log2(new_shape[1]) - 1; i += 2) {
+        auto num_rotations = std::min(static_cast<unsigned>(4), new_shape[1] / (1 << i));
 
-    auto decrypted = output_data.Decrypt();
-    spdlog::debug("Decrypted: {}", decrypted[0]);
-
-    // Mask every other column in every other row
-    std::vector<double> mask(data_.size(), 0);
-    for (unsigned channel = 0; channel < shape_[0]; ++channel) {
-        for (unsigned row = 0; row < shape_[1]; ++row) {
-            for (unsigned col = 0; col < shape_[2]; ++col) {
-                if (row % 2 == 0) {
-                    mask[channel * channel_size + row * shape_[2] + col] = col % 2 == 0 ? 1 : 0;
-                }
+        {
+            CkksVector tmp = output_data;
+            if (num_rotations == 4) {
+                tmp.PrecomputeRotations();
             }
+            for (int j = 1; j < num_rotations; ++j) {
+                auto rotation_amount = 3 * j * (new_shape[2] * 1 << i);
+                tmp += output_data.Rotate(rotation_amount);
+            }
+            output_data = tmp;
         }
-    }
-    output_data *= mask;
 
-    // Stripe the rows
-    output_data += output_data.Rotate(2 * shape_[2] - 1);
-    for (unsigned index = 0; index < data_.size(); ++index) {
-        mask[index] = (index / (shape_[2])) % 4 == 0 ? 1 : 0;
-    }
-    output_data *= mask;
-
-    // Condense ciphertexts
-    auto ctxts = output_data.GetData();
-    std::vector<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>> new_ctxts(ceil(static_cast<double>(ctxts.size()) / 4));
-    for (int index = 0; index < ctxts.size(); ++index) {
-        if (index % 4 == 0) {
-            new_ctxts[index / 4] = std::move(ctxts[index]);
+        for (int j = 0; j < mask.size(); ++j) {
+            mask[j] = (j / (4 * new_shape[2] * 1 << i)) % 4 == 0 ? 1 : 0;
         }
-        else {
-            new_ctxts[index / 4] += crypto_context->EvalRotate(ctxts[index], -(index % 4) * shape_[2]);
-        }
+        output_data *= mask;
     }
 
-    CkksTensor output_tensor(output_data, {shape_[0], shape_[1] / 2, shape_[2] / 2}, true);
-    output_tensor.SetStripe(1);
+    // Condense Channels
+    std::fill(mask.begin(), mask.end(), 0);
+    for (int i = 0; i < log2(new_shape[0]) - 1; ++i) {
+        auto num_rotations = std::min(static_cast<unsigned>(4), new_shape[0] / (1 << i));
 
-    return output_tensor;
+        {
+            auto tmp = output_data;
+            if (num_rotations == 4) {
+                tmp.PrecomputeRotations();
+            }
+            for (int j = 1; j < num_rotations; ++j) {
+                auto decrypted = tmp.Decrypt();
+                spdlog::debug("Decrypted");
+                auto rotation_amount = 3 * j * (new_shape[1] * new_shape[2] * 1 << i);
+                tmp += output_data.Rotate(rotation_amount);
+            }
+            output_data = tmp;
+        }
+
+        for (int j = 0; j < mask.size(); ++j) {
+            mask[j] = (j / (4 * new_shape[1] * new_shape[2] * 1 << i)) % 4 == 0 ? 1 : 0;
+        }
+        output_data *= mask;
+        auto decrypted = output_data.Decrypt();
+        spdlog::debug("Decrypted");
+    }
+
+    // Condense Ciphertexts
+    output_data.Condense(batch_size / 4);
+    auto decrypted = output_data.Decrypt();
+    spdlog::debug("Decrypted");
+
+    output_data.SetNumElements(new_shape[0] * new_shape[1] * new_shape[2]);
+
+    return CkksTensor(output_data, new_shape);
 }
 
 unsigned CkksTensor::GetIndex(fhenom::shape_t position) const {
@@ -266,8 +293,8 @@ unsigned CkksTensor::GetIndex(fhenom::shape_t position) const {
     const auto batch_size              = crypto_context->GetEncodingParams()->GetBatchSize();
     const auto channels_per_ciphertext = batch_size / channel_size;
     const auto ctxt_offset             = (channel / channels_per_ciphertext) * batch_size;
-    const auto ch_block_offset         = (channel % channels_per_ciphertext) * 4 * channel_size;
-    const auto ch_offset               = ((channel / channels_per_ciphertext) % 4) * 2 * shape_[2];
+    const auto ch_block_offset         = (channel / (channels_per_ciphertext / 4)) * channel_size;
+    const auto ch_offset               = (channel % (channels_per_ciphertext / 4)) * 2 * shape_[2];
     const auto row_offset              = (row / 2) * 8 * shape_[2] + (row % 2);
     const auto col_offset              = 2 * col;
 

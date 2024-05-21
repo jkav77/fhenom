@@ -294,6 +294,7 @@ CkksVector& CkksVector::operator*=(const std::vector<double>& rhs) {
         auto values_slice = std::vector<double>(start, end);
         data_[i]          = crypto_context->EvalMult(data_[i], crypto_context->MakeCKKSPackedPlaintext(values_slice));
     }
+    spdlog::debug("Level after scalar multiplication: {}", data_[0]->GetLevel());
 
     return *this;
 }
@@ -428,6 +429,31 @@ void CkksVector::Concat(const CkksVector& rhs) {
         data_.push_back(crypto_context->EvalMult(ctxt, mask_second_part_ptxt));
     }
     numElements_ = size() + rhs.size();
+}
+
+void CkksVector::Condense(unsigned num_elements, unsigned max_ctxts) {
+    auto crypto_context   = context_.GetCryptoContext();
+    const auto batch_size = crypto_context->GetEncodingParams()->GetBatchSize();
+
+    if (max_ctxts == 0) {
+        max_ctxts = batch_size / num_elements;
+    }
+
+    auto new_ctxts = std::vector<Ctxt>(ceil(static_cast<double>(data_.size()) / max_ctxts));
+    for (int rot_index = 0; rot_index < new_ctxts.size(); ++rot_index) {
+        auto ctxts = Rotate(-rot_index * num_elements).GetData();
+        for (int index = 0; index < ctxts.size(); ++index) {
+            if (index % max_ctxts == 0) {
+                new_ctxts[index / max_ctxts] = std::move(ctxts[index]);
+            }
+            else {
+                new_ctxts[index / max_ctxts] += ctxts[index];
+            }
+        }
+    }
+
+    data_        = new_ctxts;
+    numElements_ = batch_size * data_.size();
 }
 
 // CkksVector CkksVector::Merge(const std::vector<CkksVector>& vectors, unsigned num_elements) {

@@ -7,7 +7,7 @@ find_package( spdlog 1.9.2 CONFIG REQUIRED )
 
 find_package( OpenFHE 1.1.4 CONFIG REQUIRED )
 set( CMAKE_CXX_FLAGS "${OpenFHE_CXX_FLAGS}" )
-# set( CMAKE_CXX_FLAGS_DEBUG "-O0 -g" )
+set( CMAKE_CXX_FLAGS_DEBUG "-O0 -g" )
 message(STATUS "OpenFHE CXX flags: ${OpenFHE_CXX_FLAGS}")
 set( CMAKE_BINARY_DIR "build" )
 set( CMAKE_SOURCE_DIR "src" )

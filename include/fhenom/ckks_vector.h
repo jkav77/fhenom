@@ -228,6 +228,15 @@ public:
      */
     void Concat(const CkksVector& rhs);
 
+    /**
+     * @brief Condense the ciphertexts in the vector to the first `num_elements`
+     * 
+     * @param num_elements The number of elements to keep from each ciphertext
+     * @param max_ctxts The maximum number of ciphertexts to condense into one. If 0, as many ciphertexts are condensed as possible.
+     * @note This method assumes all ciphertexts are already masked with zeroes outside the elements to keep.
+     */
+    void Condense(unsigned num_elements, unsigned max_ctxts = 0);
+
     // /**
     //  * @brief Create a vector consisting of the first `num_elements` slots of each of the parameter vectors
     //  *

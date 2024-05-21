@@ -45,8 +45,9 @@ protected:
         // if (!std::filesystem::exists(test_data_dir_)) {
         context_ = Context{GetParameters()};
         context_.GenerateKeys();
-        context_.GenerateRotateKeys({-1, -2, -4, -8, -16, -32, -64, -128, -256, -512, -1024, -2048, -4096,
-                                     1,  2,  4,  8,  16,  32,  64,  128,  256,  512,  1024,  2048,  4096});
+        context_.GenerateRotateKeys({-1,    -2,    -4,    -8,    -16,    -32,  -64,  -128, -256, -512,
+                                     -1024, -2048, -4096, -8192, -16384, 1,    2,    4,    8,    16,
+                                     32,    64,    128,   256,   512,    1024, 2048, 4096, 8192, 16384});
         // context_.Save(test_data_dir_);
         //     context_.SaveRotationKeys(test_data_dir_ / "key-rotate.txt");
         //     context_.SavePublicKey(test_data_dir_ / "key-public.txt");
@@ -66,10 +67,10 @@ protected:
 
     static lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> GetParameters() {
         lbcrypto::ScalingTechnique sc_tech = lbcrypto::FLEXIBLEAUTO;
-        uint32_t mult_depth                = 4;
-        uint32_t scale_mod_size            = 59;
-        uint32_t first_mod_size            = 60;
-        uint32_t ring_dim                  = 16384;
+        uint32_t mult_depth                = 12;
+        uint32_t scale_mod_size            = 39;
+        uint32_t first_mod_size            = 40;
+        uint32_t ring_dim                  = 32768;
         lbcrypto::SecurityLevel sl         = lbcrypto::HEStd_128_classic;
 
         lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ckks_parameters;
@@ -292,22 +293,16 @@ TEST_F(CkksTensorTest, AvgPool2D) {
     auto result = ckks_tensor.AvgPool2D();
     ASSERT_EQ(result.GetShape(), (shape_t{3, 16, 16}));
 
-    auto decrypted      = result.GetData().Decrypt();
-    auto top_left_avg   = (image[0] + image[1] + image[32] + image[33]) / 4;
-    auto expected_0_0_1 = (image[2] + image[3] + image[34] + image[35]) / 4;
-    auto expected_0_1_0 = (image[32 * 2] + image[32 * 2 + 1] + image[32 * 3] + image[32 * 3 + 1]) / 4;
-    auto expected_0_2_0 = (image[32 * 4] + image[32 * 4 + 1] + image[32 * 5] + image[32 * 5 + 1]) / 4;
-    auto expected_1_0_0 = (image[1024] + image[1024 + 1] + image[1024 + 32] + image[1024 + 32 + 1]) / 4;
-    auto expected_2_0_0 = (image[2048] + image[2048 + 1] + image[2048 + 32] + image[2048 + 32 + 1]) / 4;
-    ASSERT_NEAR(decrypted[0], top_left_avg, 0.001);
-    ASSERT_NEAR(decrypted[2], expected_0_0_1, 0.001);
-    ASSERT_NEAR(decrypted[1], expected_0_1_0, 0.001);
-    ASSERT_NEAR(decrypted[128], expected_0_2_0, 0.001);
-    ASSERT_NEAR(decrypted[1024], expected_1_0_0, 0.001);
-    ASSERT_NEAR(decrypted[2048], expected_2_0_0, 0.001);
-    ASSERT_NEAR(decrypted[800], 0, 0.001);
-    ASSERT_NEAR(decrypted[1024 + 832], 0, 0.001);
-    ASSERT_NEAR(decrypted[2048 - 32], 0, 0.001);
+    auto decrypted = result.GetData().Decrypt();
+
+    for (int row = 0; row < 32; row += 2) {
+        for (int col = 0; col < 32; col += 2) {
+            auto avg = (image[row * 32 + col] + image[row * 32 + col + 1] + image[(row + 1) * 32 + col] +
+                        image[(row + 1) * 32 + col + 1]) /
+                       4;
+            ASSERT_NEAR(decrypted[row / 2 * 16 + col / 2], avg, 0.001);
+        }
+    }
 
     std::vector<double> new_image;
     for (int i = 0; i < 11; ++i) {
@@ -370,7 +365,8 @@ TEST_F(CkksTensorTest, GetIndex) {
     ASSERT_EQ(ckks_tensor.GetIndex({2, 0, 0}), 2048);
     ASSERT_EQ(ckks_tensor.GetIndex({3, 0, 0}), 3072);
     ASSERT_EQ(ckks_tensor.GetIndex({7, 0, 0}), 1024 * 7);
-    ASSERT_EQ(ckks_tensor.GetIndex({32, 0, 0}), 256);
+    ASSERT_EQ(ckks_tensor.GetIndex({8, 0, 0}), 256);
+    ASSERT_EQ(ckks_tensor.GetIndex({32, 0, 0}), 32 * 256 + 32);
     ASSERT_THROW(ckks_tensor.GetIndex({33, 0, 0}), std::invalid_argument);
     ASSERT_THROW(ckks_tensor.GetIndex({0, 0, 16}), std::invalid_argument);
     ASSERT_THROW(ckks_tensor.GetIndex({0, 16, 0}), std::invalid_argument);
