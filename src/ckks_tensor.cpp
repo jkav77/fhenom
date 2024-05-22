@@ -39,8 +39,8 @@ std::vector<fhenom::CkksVector> CkksTensor::rotate_images(const fhenom::shape_t&
 
     std::vector<fhenom::CkksVector> rotated_images(kernel_size);
 
-    for (int row = 0; row < kernel_num_rows; ++row) {
-        for (int col = 0; col < kernel_num_cols; ++col) {
+    for (unsigned row = 0; row < kernel_num_rows; ++row) {
+        for (unsigned col = 0; col < kernel_num_cols; ++col) {
             rotated_images[row * kernel_num_cols + col] =
                 data_.Rotate((row - padding) * data_num_cols + (col - padding));
         }
@@ -170,7 +170,7 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
         }
 
         // Consolidate the output of every filter channel in the first channel
-        for (auto channel_index = 1; channel_index < num_channels; ++channel_index) {
+        for (unsigned channel_index = 1; channel_index < num_channels; ++channel_index) {
             filter_output += filter_output.Rotate(channel_index * channel_size);
         }
 
@@ -199,7 +199,7 @@ CkksTensor CkksTensor::AvgPool2D() {
 
     // Average
     output_data += output_data.Rotate(1) + output_data.Rotate(shape_[2]) + output_data.Rotate(shape_[2] + 1);
-    for (int i = 0; i < mask.size(); ++i) {
+    for (unsigned i = 0; i < mask.size(); ++i) {
         mask[i] = (i / shape_[2]) % 2 == 0 && i % 2 == 0 ? 0.25 : 0;  // Every other column in every other row
     }
     output_data *= mask;
@@ -207,7 +207,7 @@ CkksTensor CkksTensor::AvgPool2D() {
     // Condense columns
     for (int i = 0; i < log2(shape_[2]) - 1; ++i) {
         output_data += output_data.Rotate(1 << i);
-        for (int j = 0; j < mask.size(); ++j) {
+        for (unsigned j = 0; j < mask.size(); ++j) {
             mask[j] = (j / shape_[2]) % 2 == 0 && j / (1 << (i + 1)) % 2 == 0 ? 1 : 0;
         }
         output_data *= mask;
@@ -223,14 +223,14 @@ CkksTensor CkksTensor::AvgPool2D() {
             if (num_rotations == 4) {
                 tmp.PrecomputeRotations();
             }
-            for (int j = 1; j < num_rotations; ++j) {
+            for (unsigned j = 1; j < num_rotations; ++j) {
                 auto rotation_amount = 3 * j * (new_shape[2] * 1 << i);
                 tmp += output_data.Rotate(rotation_amount);
             }
             output_data = tmp;
         }
 
-        for (int j = 0; j < mask.size(); ++j) {
+        for (unsigned j = 0; j < mask.size(); ++j) {
             mask[j] = (j / (4 * new_shape[2] * 1 << i)) % 4 == 0 ? 1 : 0;
         }
         output_data *= mask;
@@ -246,7 +246,7 @@ CkksTensor CkksTensor::AvgPool2D() {
             if (num_rotations == 4) {
                 tmp.PrecomputeRotations();
             }
-            for (int j = 1; j < num_rotations; ++j) {
+            for (unsigned j = 1; j < num_rotations; ++j) {
                 auto decrypted = tmp.Decrypt();
                 spdlog::debug("Decrypted");
                 auto rotation_amount = 3 * j * (new_shape[1] * new_shape[2] * 1 << i);
@@ -255,7 +255,7 @@ CkksTensor CkksTensor::AvgPool2D() {
             output_data = tmp;
         }
 
-        for (int j = 0; j < mask.size(); ++j) {
+        for (unsigned j = 0; j < mask.size(); ++j) {
             mask[j] = (j / (4 * new_shape[1] * new_shape[2] * 1 << i)) % 4 == 0 ? 1 : 0;
         }
         output_data *= mask;

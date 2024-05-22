@@ -440,9 +440,9 @@ void CkksVector::Condense(unsigned num_elements, unsigned max_ctxts) {
     }
 
     auto new_ctxts = std::vector<Ctxt>(ceil(static_cast<double>(data_.size()) / max_ctxts));
-    for (int rot_index = 0; rot_index < new_ctxts.size(); ++rot_index) {
+    for (unsigned rot_index = 0; rot_index < new_ctxts.size(); ++rot_index) {
         auto ctxts = Rotate(-rot_index * num_elements).GetData();
-        for (int index = 0; index < ctxts.size(); ++index) {
+        for (unsigned index = 0; index < ctxts.size(); ++index) {
             if (index % max_ctxts == 0) {
                 new_ctxts[index / max_ctxts] = std::move(ctxts[index]);
             }
