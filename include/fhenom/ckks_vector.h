@@ -57,14 +57,6 @@ public:
     void Bootstrap();
 
     /**
-     * @brief Rectified linear unit (ReLU) activation function
-     * 
-     * @param depth The depth of the approximation (4 or 11)
-     * @return CkksVector the ReLU of the vector
-     */
-    CkksVector ReLU(unsigned depth = 4) const;
-
-    /**
      * @brief Evaluate a polynomial on the vector elements
      * 
      * @param coeffs The coefficients in decreasing degree

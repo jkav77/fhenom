@@ -6,11 +6,11 @@
 
 using fhenom::CkksTensor;
 
-CkksTensor::CkksTensor(CkksVector data, shape_t shape, bool sparse) {
-    SetData(std::move(data), std::move(shape), sparse);
+CkksTensor::CkksTensor(const CkksVector& data, const shape_t& shape, bool sparse) {
+    SetData(data, shape, sparse);
 }
 
-void CkksTensor::SetData(CkksVector data, shape_t shape, bool sparse) {
+void CkksTensor::SetData(const CkksVector& data, const shape_t& shape, bool sparse) {
     unsigned len = 1;
     for (auto dim : shape) {
         len *= dim;
@@ -26,8 +26,9 @@ void CkksTensor::SetData(CkksVector data, shape_t shape, bool sparse) {
         throw std::invalid_argument("Data vector size does not match shape");
     }
 
-    data_  = std::move(data);
-    shape_ = std::move(shape);
+    data_   = data;
+    shape_  = shape;
+    sparse_ = sparse;
 }
 
 std::vector<fhenom::CkksVector> CkksTensor::rotate_images(const fhenom::shape_t& kernel_shape) {
@@ -271,4 +272,66 @@ CkksTensor CkksTensor::AvgPool2D() {
     output_data.SetNumElements(new_shape[0] * new_shape[1] * new_shape[2]);
 
     return CkksTensor(output_data, new_shape);
+}
+
+CkksTensor CkksTensor::ReLU(unsigned depth) const {
+    CkksVector result_data;
+    switch (depth) {
+        case 3:
+            result_data = data_.EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 7);
+            ;
+            break;
+        case 4:
+            result_data = data_.EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 13);
+            break;
+        case 10:
+            result_data = data_.EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 1023);
+            break;
+        case 11:
+            result_data = data_.EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 2047);
+            break;
+        case 12:
+            result_data = data_.EvalChebyshev(
+                [](double x) -> double {
+                    if (x < 0) {
+                        return 0;
+                    }
+                    return x;
+                },
+                -1, 1, 4095);
+            break;
+        default:
+            spdlog::error("ReLU of depth {} not implemented.", depth);
+            throw std::invalid_argument("ReLU of depth not implemented.");
+    }
+
+    return CkksTensor(result_data, shape_, sparse_);
 }

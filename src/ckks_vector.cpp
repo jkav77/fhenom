@@ -34,69 +34,6 @@ void CkksVector::Bootstrap() {
     }
 }
 
-CkksVector CkksVector::ReLU(unsigned depth) const {
-    CkksVector result;
-    switch (depth) {
-        case 3:
-            return EvalChebyshev(
-                [](double x) -> double {
-                    if (x < 0) {
-                        return 0;
-                    }
-                    return x;
-                },
-                -1, 1, 7);
-            break;
-        case 4:
-            return EvalChebyshev(
-                [](double x) -> double {
-                    if (x < 0) {
-                        return 0;
-                    }
-                    return x;
-                },
-                -1, 1, 13);
-            break;
-        case 10:
-            return EvalChebyshev(
-                [](double x) -> double {
-                    if (x < 0) {
-                        return 0;
-                    }
-                    return x;
-                },
-                -1, 1, 1023);
-            break;
-        case 11:
-            return EvalChebyshev(
-                [](double x) -> double {
-                    if (x < 0) {
-                        return 0;
-                    }
-                    return x;
-                },
-                -1, 1, 2047);
-            break;
-        case 12:
-            return EvalChebyshev(
-                [](double x) -> double {
-                    if (x < 0) {
-                        return 0;
-                    }
-                    return x;
-                },
-                -1, 1, 4095);
-            break;
-        default:
-            spdlog::error("ReLU of depth {} not implemented.", depth);
-            throw std::invalid_argument("ReLU of depth not implemented.");
-    }
-
-    // (1/2) * (x + x * sign(x))
-    result = (*this + *this * (result)) * std::vector<double>(this->size(), 0.5);
-    return result;
-}
-
 CkksVector CkksVector::EvalPoly(const std::vector<double>& coefficients) const {
     auto crypto_context = context_.GetCryptoContext();
 

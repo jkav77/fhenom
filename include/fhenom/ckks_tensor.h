@@ -10,12 +10,12 @@ namespace fhenom {
 class CkksTensor {
     fhenom::CkksVector data_;
     fhenom::shape_t shape_;
-    unsigned stripe_{0};
+    bool sparse_;
 
 public:
     CkksTensor() : data_{}, shape_{0} {}
 
-    CkksTensor(fhenom::CkksVector data, fhenom::shape_t shape, bool sparse = false);
+    CkksTensor(const fhenom::CkksVector& data, const fhenom::shape_t& shape, bool sparse = false);
 
     //////////////////////////////////////////////////////////////////////////////
     // Homomorphic Operations
@@ -39,24 +39,24 @@ public:
      */
     fhenom::CkksTensor AvgPool2D();
 
+    /**
+     * @brief Rectified linear unit (ReLU) activation function
+     * 
+     * @param depth The depth of the approximation (4 or 11)
+     * @return CkksTensor the ReLU of the tensor
+     */
+    CkksTensor ReLU(unsigned depth = 4) const;
+
     //////////////////////////////////////////////////////////////////////////////
     // Getters and Setters
 
-    void SetData(fhenom::CkksVector data, shape_t shape, bool sparse = false);
+    void SetData(const fhenom::CkksVector& data, const shape_t& shape, bool sparse = false);
 
     fhenom::CkksVector GetData() const {
         return data_;
     }
     fhenom::shape_t GetShape() const {
         return shape_;
-    }
-
-    void SetStripe(unsigned stripe) {
-        stripe_ = stripe;
-    }
-
-    unsigned GetStripe() const {
-        return stripe_;
     }
 
     unsigned GetIndex(fhenom::shape_t position) const;
