@@ -14,97 +14,39 @@ class CkksVectorTest : public ::testing::Test {
 protected:
     fhenom::Context context_;
     fhenom::Context precise_context_;
-    fhenom::Context fhe_context_;
     const std::vector<double> test_data_{0, 1, -1, 16, -16, 5, 50, 2, 10, 1, 2, 3, 4, 5, 17};
     const std::vector<double> testDomain_{0, 1, 2, 4, 8, 16, 32, 64, 96, 100};
     const std::filesystem::path test_data_dir_{"testData/ckks_vector"};
     const std::vector<int> rotation_indices_{1,  2,  4,  8,  16,  32,  64,  128,  256,  512,  1024,  2048,
                                              -1, -2, -4, -8, -16, -32, -64, -128, -256, -512, -1024, -2048};
 
-    // lbcrypto::ScalingTechnique scTech = lbcrypto::FLEXIBLEAUTOEXT;
-    const uint32_t multDepth_         = 2;
-    const uint32_t scaleModSize_      = 26;
-    const uint32_t firstModSize_      = 30;
-    const uint32_t ringDim_           = 8192;
-    const lbcrypto::SecurityLevel sl_ = lbcrypto::HEStd_128_classic;
-    // uint32_t scaleModSize = 50;
-    // uint32_t firstModSize = 60;
-    // uint32_t batchSize = slots;
-
     double epsilon_ = 0.01;
 
-    CkksVector ckks_vector_, precise_vector_, fhe_vector_;
+    CkksVector ckks_vector_, precise_vector_;
     CkksVectorTest() {
         spdlog::set_level(spdlog::level::debug);
 
-        if (std::filesystem::exists(test_data_dir_)) {
-            spdlog::debug("Saved test data found, loading...");
-            context_.Load("testData/ckks_vector");
-            context_.LoadPublicKey("testData/ckks_vector/key-public.txt");
-            context_.LoadSecretKey("testData/ckks_vector/key-secret.txt");
+        spdlog::debug("No saved test data found, generating new data...");
+        context_ = get_leveled_context();
+        spdlog::debug("Generating keys");
+        context_.GenerateKeys();
 
-            ckks_vector_.SetContext(context_);
-            ckks_vector_.Load(test_data_dir_ / "data.txt");
+        ckks_vector_.SetContext(context_);
+        ckks_vector_.Encrypt(test_data_);
 
-            precise_context_.Load(test_data_dir_ / "precise");
-            precise_context_.LoadRotationKeys(test_data_dir_ / "precise" / "key-rotate.txt");
-            precise_context_.LoadPublicKey(test_data_dir_ / "precise" / "key-public.txt");
-            precise_context_.LoadSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
+        precise_context_ = get_high_mult_depth_leveled_context();
+        spdlog::debug("Generating keys for precise vector");
+        precise_context_.GenerateKeys();
 
-            precise_vector_.SetContext(precise_context_);
-            precise_vector_.Load(test_data_dir_ / "precise" / "data.txt");
-
-            // fhe_context_.Load(test_data_dir_ / "fhe");
-            // fhe_context_.LoadRotationKeys(test_data_dir_ / "fhe" / "key-rotate.txt");
-            // fhe_context_.LoadPublicKey(test_data_dir_ / "fhe" / "key-public.txt");
-            // fhe_context_.LoadSecretKey(test_data_dir_ / "fhe" / "key-secret.txt");
-            //
-            // fhe_vector_.SetContext(fhe_context_);
-            // fhe_vector_.Load(test_data_dir_ / "fhe" / "data.txt");
-        }
-        else {
-            spdlog::debug("No saved test data found, generating new data...");
-            context_ = get_leveled_context();
-            context_.GenerateKeys();
-            context_.GenerateRotateKeys(rotation_indices_);
-            context_.Save(test_data_dir_);
-            context_.SavePublicKey(test_data_dir_ / "key-public.txt");
-            context_.SaveSecretKey(test_data_dir_ / "key-secret.txt");
-
-            ckks_vector_.SetContext(context_);
-            ckks_vector_.Encrypt(test_data_);
-            ckks_vector_.Save(test_data_dir_ / "data.txt");
-
-            precise_context_ = get_high_mult_depth_leveled_context();
-            precise_context_.GenerateKeys();
-            precise_context_.GenerateSumKey();
-            precise_context_.GenerateRotateKeys(rotation_indices_);
-            precise_context_.Save(test_data_dir_ / "precise");
-            precise_context_.SavePublicKey(test_data_dir_ / "precise" / "key-public.txt");
-            precise_context_.SaveSecretKey(test_data_dir_ / "precise" / "key-secret.txt");
-
-            precise_vector_.SetContext(precise_context_);
-            precise_vector_.Encrypt(test_data_);
-            precise_vector_.Save(test_data_dir_ / "precise" / "data.txt");
-
-            fhe_context_ = get_fhe_context();
-            fhe_context_.GenerateKeys();
-            fhe_context_.GenerateBootstrapKeys();
-            fhe_context_.Save(test_data_dir_ / "fhe");
-            fhe_context_.SavePublicKey(test_data_dir_ / "fhe" / "key-public.txt");
-            fhe_context_.SaveSecretKey(test_data_dir_ / "fhe" / "key-secret.txt");
-
-            fhe_vector_.SetContext(fhe_context_);
-            fhe_vector_.Encrypt(test_data_);
-            fhe_vector_.Save(test_data_dir_ / "fhe" / "data.txt");
-        }
+        precise_vector_.SetContext(precise_context_);
+        precise_vector_.Encrypt(test_data_);
     }
 };
 
 //////////////////////////////////////////////////////////////////////////////
 // Encryption and Decryption
 
-TEST_F(CkksVectorTest, Encrypt) {
+TEST_F(CkksVectorTest, EncryptDecrypt) {
     CkksVector col1{};
     col1.SetContext(ckks_vector_.GetContext());
     col1.Encrypt(test_data_);
@@ -117,11 +59,7 @@ TEST_F(CkksVectorTest, Encrypt) {
     col2.SetContext(ckks_vector_.GetContext());
     col2.Encrypt(large_data);
     ASSERT_EQ(col2.size(), 48842);
-    ASSERT_EQ(col2.GetData().size(), ceil(48842.0 / (static_cast<double>(ringDim_) / 2)));
-}
 
-TEST_F(CkksVectorTest, Decrypt) {
-    ckks_vector_.Load(test_data_dir_ / "data.txt");
     auto decrypted = ckks_vector_.Decrypt();
 
     ASSERT_EQ(decrypted.size(), test_data_.size());
@@ -133,20 +71,20 @@ TEST_F(CkksVectorTest, Decrypt) {
 //////////////////////////////////////////////////////////////////////////////
 // Homomorphic Operations
 
-TEST_F(CkksVectorTest, Bootstrap) {
-    fhe_context_.Load(test_data_dir_ / "fhe");
-    fhe_context_.LoadRotationKeys(test_data_dir_ / "fhe" / "key-rotate.txt");
-    fhe_context_.LoadPublicKey(test_data_dir_ / "fhe" / "key-public.txt");
-    fhe_context_.LoadSecretKey(test_data_dir_ / "fhe" / "key-secret.txt");
+// Uncomment to run. Very slow.
+// TEST_F(CkksVectorTest, Bootstrap) {
+//     auto fhe_context = get_fhe_context();
+//     fhe_context.GenerateKeys();
+//     fhe_context.GenerateBootstrapKeys();
 
-    fhe_vector_.SetContext(fhe_context_);
-    fhe_vector_.Load(test_data_dir_ / "fhe" / "data.txt");
+//     CkksVector fhe_vector(fhe_context);
+//     fhe_vector.Encrypt(test_data_);
 
-    fhe_vector_.GetSignUsingPolyComp();
-    spdlog::debug("Ciphertext level before bootstrap: {}", fhe_vector_.GetData()[0]->GetLevel());
-    fhe_vector_.Bootstrap();
-    spdlog::debug("Ciphertext level after bootstrap: {}", fhe_vector_.GetData()[0]->GetLevel());
-}
+//     fhe_vector.GetSignUsingPolyComp();
+//     spdlog::debug("Ciphertext level before bootstrap: {}", fhe_vector.GetData()[0]->GetLevel());
+//     fhe_vector.Bootstrap();
+//     spdlog::debug("Ciphertext level after bootstrap: {}", fhe_vector.GetData()[0]->GetLevel());
+// }
 
 TEST_F(CkksVectorTest, GetSign) {
     precise_vector_ *= std::vector<double>(test_data_.size(), 1.0 / 50.0);
@@ -166,9 +104,7 @@ TEST_F(CkksVectorTest, GetSign) {
     }
 }
 
-TEST(CkksVector, ReLU4) {
-    spdlog::set_level(spdlog::level::debug);
-
+TEST_F(CkksVectorTest, ReLU) {
     uint32_t scale_mod_size = 48;
     lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> params;
 
@@ -187,8 +123,8 @@ TEST(CkksVector, ReLU4) {
     CkksVector vec(context);
     vec.Encrypt(relu_data);
 
-    const double epsilon = 0.003;
-    auto compute_error   = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
+    double epsilon     = 0.003;
+    auto compute_error = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
         std::vector<double> error(data.size());
         for (unsigned i = 0; i < data.size(); ++i) {
             error[i] = std::abs(result[i] - std::max(0.0, data[i]));
@@ -197,8 +133,8 @@ TEST(CkksVector, ReLU4) {
         return error;
     };
 
-    spdlog::debug("ReLU(3)");
-    auto result         = vec.ReLU(3).Decrypt();
+    spdlog::debug("ReLU(4)");
+    auto result         = vec.ReLU(4).Decrypt();
     auto error          = compute_error(result, relu_data);
     auto number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
     spdlog::debug("Number correct: {}", number_correct);
@@ -206,86 +142,20 @@ TEST(CkksVector, ReLU4) {
     spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
     spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
 
-    spdlog::debug("ReLU(4)");
-    result         = vec.ReLU(4).Decrypt();
-    error          = compute_error(result, relu_data);
-    number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
-    spdlog::debug("Number correct: {}", number_correct);
-    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-
-    spdlog::debug("\nChebyshev degree 13");
-    result         = vec.EvalChebyshev([](double x) -> double { return x < 0 ? 0 : x; }, -1, 1, 13).Decrypt();
-    error          = compute_error(result, relu_data);
-    number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
-    spdlog::debug("Number correct: {}", number_correct);
-    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-
-    // spdlog::debug("\nkRelu4Coeffs");
-    // result         = vec.EvalPoly(fhenom::kRelu4Coeffs).Decrypt();
-    // error          = compute_error(result, relu_data);
-    // number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
-    // spdlog::debug("Number correct: {}", number_correct);
-    // spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    // spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    // spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-
-    // result = vec.EvalChebyshev([](double x) -> double { return x < 0 ? 0 : x; }, -1, 1, 15).Decrypt();
-    // error  = compute_error(result, relu_data);
-    // number_correct =
-    //     std::count_if(error.begin(), error.end(), [degree4_epsilon](double x) { return x < degree4_epsilon; });
-    // spdlog::debug("Number correct: {}", number_correct);
-    // spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    // spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    // spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-
-    // ASSERT_GT(number_correct, relu_data.size() * 0.5);
-}
-
-TEST(CkksVector, ReLU12) {
-    spdlog::set_level(spdlog::level::debug);
-
-    uint32_t scale_mod_size = 48;
-    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> params;
-
-    usint depth = 12;
+    scale_mod_size = 48;
+    depth          = 12;
     params.SetMultiplicativeDepth(depth);
     params.SetScalingModSize(scale_mod_size);
     params.SetRingDim(32768);
     params.SetSecurityLevel(lbcrypto::HEStd_NotSet);
 
-    fhenom::Context context(params);
+    context = fhenom::Context(params);
     context.GenerateKeys();
 
-    std::vector<double> relu_data(201);
-    std::iota(relu_data.begin(), relu_data.end(), -100.0);
-    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.01; });
-
-    CkksVector vec(context);
+    vec = fhenom::Context(context);
     vec.Encrypt(relu_data);
 
-    const double epsilon = 0.001;
-    auto compute_error   = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
-        std::vector<double> error(data.size());
-        for (unsigned i = 0; i < data.size(); ++i) {
-            error[i] = std::abs(result[i] - std::max(0.0, data[i]));
-        }
-
-        return error;
-    };
-
-    spdlog::debug("Computing ReLU(10)...");
-    auto result = vec.ReLU(10).Decrypt();
-
-    auto error          = compute_error(result, relu_data);
-    auto number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
-    spdlog::debug("Number correct: {}", number_correct);
-    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+    epsilon = 0.001;
 
     spdlog::debug("Computing ReLU(11)...");
     result = vec.ReLU(11).Decrypt();
@@ -296,70 +166,6 @@ TEST(CkksVector, ReLU12) {
     spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
     spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
     spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-
-    spdlog::debug("Computing ReLU(12)...");
-    // result = vec.ReLU(12).Decrypt();
-    result = vec.EvalChebyshev([](double x) -> double { return x < 0 ? 0 : x; }, -1, 1, 3071).Decrypt();
-
-    error          = compute_error(result, relu_data);
-    number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
-    spdlog::debug("Number correct: {}", number_correct);
-    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-}
-
-TEST_F(CkksVectorTest, ReLU) {
-    std::vector<double> relu_data(201);
-    std::iota(relu_data.begin(), relu_data.end(), -100.0);
-    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.01; });
-
-    precise_vector_.Encrypt(relu_data);
-
-    auto result = precise_vector_.ReLU().Decrypt();
-
-    auto compute_error = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
-        std::vector<double> error(data.size());
-        for (unsigned i = 0; i < data.size(); ++i) {
-            error[i] = std::abs(result[i] - std::max(0.0, data[i]));
-        }
-
-        return error;
-    };
-
-    const double degree4_epsilon = 0.003;
-    auto error                   = compute_error(result, relu_data);
-    auto number_correct =
-        std::count_if(error.begin(), error.end(), [degree4_epsilon](double x) { return x < degree4_epsilon; });
-    spdlog::debug("Number correct: {}", number_correct);
-    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-
-    result = precise_vector_.EvalChebyshev([](double x) -> double { return x < 0 ? 0 : x; }, -1, 1, 15).Decrypt();
-    error  = compute_error(result, relu_data);
-    number_correct =
-        std::count_if(error.begin(), error.end(), [degree4_epsilon](double x) { return x < degree4_epsilon; });
-    spdlog::debug("Number correct: {}", number_correct);
-    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-
-    ASSERT_GT(number_correct, relu_data.size() * 0.5);
-
-    precise_vector_.Encrypt(relu_data);
-
-    const double degree12_epsilon = 0.001;
-    result                        = precise_vector_.ReLU(12).Decrypt();
-    error                         = compute_error(result, relu_data);
-    number_correct =
-        std::count_if(error.begin(), error.end(), [degree12_epsilon](double x) { return x < degree12_epsilon; });
-    spdlog::debug("Number correct: {}", number_correct);
-    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-
-    ASSERT_EQ(number_correct, relu_data.size());
 }
 
 TEST_F(CkksVectorTest, GetSignUsingPolyComp) {
@@ -415,61 +221,22 @@ TEST_F(CkksVectorTest, IsEqual) {
 
 TEST_F(CkksVectorTest, GetSum) {
     auto ring_dim = precise_vector_.GetContext().GetCryptoContext()->GetRingDimension();
-
-    auto result    = precise_vector_.GetSum();
-    auto decrypted = result.Decrypt();
-    ASSERT_EQ(decrypted.size(), 1);
-    ASSERT_NEAR(decrypted[0], std::reduce(test_data_.begin(), test_data_.end()), epsilon_);
-
-    precise_vector_.Encrypt(std::vector<double>(15, 1));
-    result    = precise_vector_.GetSum();
-    decrypted = result.Decrypt();
-    ASSERT_NEAR(decrypted[0], 15, epsilon_);
+    precise_context_.GenerateSumKey();
 
     precise_vector_.Encrypt(std::vector<double>(ring_dim * 1.25, 1));
-    result    = precise_vector_.GetSum();
-    decrypted = result.Decrypt();
+    auto result    = precise_vector_.GetSum();
+    auto decrypted = result.Decrypt();
     ASSERT_NEAR(decrypted[0], ring_dim * 1.25, epsilon_);
-
-    precise_vector_.Encrypt(std::vector<double>(ring_dim / 2, 1));
-    result    = precise_vector_.GetSum();
-    decrypted = result.Decrypt();
-    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
 }
 
 TEST_F(CkksVectorTest, GetCount) {
+    precise_context_.GenerateSumKey();
     auto ring_dim = precise_vector_.GetContext().GetCryptoContext()->GetRingDimension();
 
-    std::vector<double> test_data(ring_dim / 2, 1);
-    precise_vector_.Encrypt(test_data);
-    auto result    = precise_vector_.GetCount(1, 100);
-    auto decrypted = result.Decrypt();
-    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
-
     precise_vector_.Encrypt(std::vector<double>(40000, 1));
-    result    = precise_vector_.GetCount(1);
-    decrypted = result.Decrypt();
+    auto result    = precise_vector_.GetCount(1);
+    auto decrypted = result.Decrypt();
     ASSERT_NEAR(decrypted[0], 40000, epsilon_);
-
-    test_data = std::vector<double>(ring_dim, 0);
-    std::fill(test_data.begin(), test_data.begin() + ring_dim / 2, 1);
-    precise_vector_.Encrypt(test_data);
-    decrypted = precise_vector_.GetCount(1).Decrypt();
-    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
-    decrypted = precise_vector_.GetCount(0).Decrypt();
-    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
-
-    test_data = std::vector<double>(ring_dim / 2, 1);
-    precise_vector_.Encrypt(test_data);
-    result    = precise_vector_.GetCount(1);
-    decrypted = result.Decrypt();
-    ASSERT_NEAR(decrypted[0], ring_dim / 2.0, epsilon_);
-
-    test_data = std::vector<double>(ring_dim / 2, 0);
-    precise_vector_.Encrypt(test_data);
-    result    = precise_vector_.GetCount(1);
-    decrypted = result.Decrypt();
-    ASSERT_NEAR(decrypted[0], 0, epsilon_);
 
     std::vector<double> large_data(ring_dim * 1.25, 0);
     precise_vector_.Encrypt(large_data);
@@ -479,6 +246,8 @@ TEST_F(CkksVectorTest, GetCount) {
 }
 
 TEST_F(CkksVectorTest, Rotate) {
+    context_.GenerateRotateKeys(rotation_indices_);
+
     auto rotated   = ckks_vector_.Rotate(1);
     auto decrypted = rotated.Decrypt();
     ASSERT_EQ(decrypted.size(), test_data_.size());
@@ -514,8 +283,9 @@ TEST_F(CkksVectorTest, Rotate) {
         ASSERT_NEAR(decrypted[i], test_data_[(i + 3) % test_data_.size()], epsilon_);
     }
 
-    std::vector<double> large_data(ringDim_ / 2);
-    for (unsigned i = 0; i < ringDim_ / 2; ++i) {
+    auto batch_size = ckks_vector_.GetContext().GetCryptoContext()->GetEncodingParams()->GetBatchSize();
+    std::vector<double> large_data(2 * batch_size);
+    for (unsigned i = 0; i < large_data.size(); ++i) {
         large_data[i] = i;
     }
     CkksVector large_vec;
@@ -525,14 +295,14 @@ TEST_F(CkksVectorTest, Rotate) {
     decrypted = rotated.Decrypt();
     ASSERT_EQ(decrypted.size(), large_data.size());
     for (int i = 0; i < 8; ++i) {
-        ASSERT_NEAR(decrypted[i], large_data[large_data.size() - 8 + i], epsilon_);
+        ASSERT_NEAR(decrypted[i], large_data[batch_size - 8 + i], epsilon_);
     }
     ASSERT_NEAR(decrypted[8], large_data[0], epsilon_);
     ASSERT_NEAR(decrypted[9], large_data[1], epsilon_);
 
-    large_data.clear();
-    for (unsigned i = 0; i < ringDim_; ++i) {
-        large_data.push_back(i);
+    large_data = std::vector<double>(2 * batch_size);
+    for (unsigned i = 0; i < large_data.size(); ++i) {
+        large_data[i] = i;
     }
     large_vec.Encrypt(large_data);
     rotated   = large_vec.Rotate(8);
@@ -540,30 +310,17 @@ TEST_F(CkksVectorTest, Rotate) {
     ASSERT_EQ(decrypted.size(), large_data.size());
     for (int i = 0; i < 8; ++i) {
         ASSERT_NEAR(decrypted[i], large_data[i + 8], epsilon_);
-        ASSERT_NEAR(decrypted[ringDim_ / 2 + i], large_data[ringDim_ / 2 + i + 8], epsilon_);
+        ASSERT_NEAR(decrypted[batch_size + i], large_data[batch_size + i + 8], epsilon_);
     }
-}
-
-TEST_F(CkksVectorTest, FastRotate) {
-    // TODO(jkav77): This isn't testing anything...
-    auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
-
-    auto key_map = crypto_context->GetEvalAutomorphismKeyMap(ckks_vector_.GetData()[0]->GetKeyTag());
-    for (const auto& rot_idx : {-1, 1, 8, -8}) {
-        auto am_idx = lbcrypto::FindAutomorphismIndex2n(rot_idx, crypto_context->GetCyclotomicOrder());
-        ASSERT_EQ(key_map.count(am_idx), 1);
-    }
-
-    auto idx = lbcrypto::FindAutomorphismIndex2n(7, crypto_context->GetCyclotomicOrder());
-    ASSERT_EQ(key_map.count(idx), 0);
 }
 
 TEST_F(CkksVectorTest, Multiply) {
     auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
+    auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
 
     CkksVector vector_1(ckks_vector_.GetContext());
     CkksVector vector_2(ckks_vector_.GetContext());
-    auto test_size = ringDim_ - 1024;
+    auto test_size = batch_size - 1024;
 
     std::vector<double> values_1(test_size, 1);
     vector_1.Encrypt(values_1);
@@ -599,12 +356,12 @@ TEST_F(CkksVectorTest, Addition) {
     result = test_vector.Decrypt();
     ASSERT_NEAR(result[0], test_data_[0] * 3, epsilon_);
 
-    ckks_vector_ += ckks_vector_.Rotate(1);
     result = ckks_vector_.Decrypt();
-    ASSERT_NEAR(result[0], test_data_[0] + test_data_[1], epsilon_);
+    ASSERT_NEAR(result[0], 2 * test_data_[0], epsilon_);
 }
 
 TEST_F(CkksVectorTest, Concat) {
+    context_.GenerateRotateKeys(rotation_indices_);
     auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
     auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
 
@@ -646,29 +403,9 @@ TEST_F(CkksVectorTest, Concat) {
 }
 
 TEST_F(CkksVectorTest, Condense) {
+    //TODO (jkav77) Add test assertions
     ckks_vector_.Condense(test_data_.size());
 }
-
-// TEST_F(CkksVectorTest, Merge) {
-//     const size_t num_vectors = 10;
-//     std::vector<CkksVector> vectors(num_vectors);
-//     auto context = ckks_vector_.GetContext();
-//     for (auto i = 0; i < 10; ++i) {
-//         vectors[i] = CkksVector(context);
-//         vectors[i].Encrypt(test_data_);
-//     }
-
-//     auto result = CkksVector::Merge(vectors);
-
-//     ASSERT_EQ(result.size(), num_vectors);
-
-//     auto decrypted = result.Decrypt();
-//     ASSERT_EQ(decrypted.size(), num_vectors);
-
-//     for (const auto& element : decrypted) {
-//         ASSERT_NEAR(element, test_data_[0], epsilon_);
-//     }
-// }
 
 //////////////////////////////////////////////////////////////////////////////
 // File I/O

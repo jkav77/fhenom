@@ -42,24 +42,11 @@ protected:
     CkksTensorTest() {
         spdlog::set_level(spdlog::level::debug);
 
-        // if (!std::filesystem::exists(test_data_dir_)) {
         context_ = Context{GetParameters()};
         context_.GenerateKeys();
         context_.GenerateRotateKeys({-1,    -2,    -4,    -8,    -16,    -32,  -64,  -128, -256, -512,
                                      -1024, -2048, -4096, -8192, -16384, 1,    2,    4,    8,    16,
                                      32,    64,    128,   256,   512,    1024, 2048, 4096, 8192, 16384});
-        // context_.Save(test_data_dir_);
-        //     context_.SaveRotationKeys(test_data_dir_ / "key-rotate.txt");
-        //     context_.SavePublicKey(test_data_dir_ / "key-public.txt");
-        //     context_.SaveSecretKey(test_data_dir_ / "key-secret.txt");
-        // }
-        // else {
-        //     context_.Load(test_data_dir_);
-        //     context_.LoadRotationKeys(test_data_dir_ / "key-rotate.txt");
-        //     context_.LoadPublicKey(test_data_dir_ / "key-public.txt");
-        //     context_.LoadSecretKey(test_data_dir_ / "key-secret.txt");
-        // }
-
         ckks_vector_.SetContext(context_);
         ckks_vector_.Encrypt(test_data_);
         ckks_tensor_ = CkksTensor{ckks_vector_, {3, 5, 5}};
@@ -80,7 +67,6 @@ protected:
         ckks_parameters.SetScalingTechnique(sc_tech);
         ckks_parameters.SetSecurityLevel(sl);
         ckks_parameters.SetRingDim(ring_dim);
-        // ckksParameters.SetBatchSize(batchSize);
         ckks_parameters.SetSecretKeyDist(lbcrypto::UNIFORM_TERNARY);
         ckks_parameters.SetKeySwitchTechnique(lbcrypto::HYBRID);
         ckks_parameters.SetNumLargeDigits(3);
@@ -148,7 +134,7 @@ TEST_F(CkksTensorTest, Conv2D) {
     // Conv layer with 4 filters
     std::vector<double> weights(108);
     for (unsigned i = 0; i < 4; ++i) {
-        std::fill(weights.begin() + i * 27, weights.begin() + (i + 1) * 27, (i + 1) / 100.0);
+        std::fill(weights.begin() + i * 27, weights.begin() + (i + 1) * 27, (i + 1) / 10.0);
     }
     Tensor filter(weights, {4, 3, 3, 3});
     tensor = ckks_tensor_.Conv2D(filter, fhenom::Tensor{{0, 0, 0, 0}, {4}});
@@ -185,9 +171,7 @@ TEST_F(CkksTensorTest, Conv2D) {
 }
 
 TEST_F(CkksTensorTest, Conv2DSpanCiphertexts) {
-    auto batch_size = context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize();
-
-    const std::vector<double> image_data(batch_size * 0.75, 0.1);
+    const std::vector<double> image_data(3072, 0.1);
     CkksVector image_vec(context_);
     image_vec.Encrypt(image_data);
     CkksTensor image(image_vec, {3, 32, 32});
@@ -312,62 +296,4 @@ TEST_F(CkksTensorTest, AvgPool2D) {
     ckks_vector_.Encrypt(new_image);
     ckks_tensor.SetData(ckks_vector_, {33, 32, 32});
     ckks_tensor.AvgPool2D();
-}
-
-TEST_F(CkksTensorTest, GetIndex) {
-    auto image = loadImage();
-    ckks_vector_.Encrypt(image);
-    CkksTensor ckks_tensor(ckks_vector_, {3, 32, 32});
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 0}), 0);
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 1, 0}), 32);
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 1}), 1);
-    ASSERT_EQ(ckks_tensor.GetIndex({1, 0, 0}), 1024);
-    ASSERT_EQ(ckks_tensor.GetIndex({2, 0, 0}), 2048);
-    ASSERT_THROW(ckks_tensor.GetIndex({3, 0, 0}), std::invalid_argument);
-    ASSERT_THROW(ckks_tensor.GetIndex({0, 0, 32}), std::invalid_argument);
-    ASSERT_THROW(ckks_tensor.GetIndex({0, 32, 0}), std::invalid_argument);
-
-    ckks_tensor = ckks_tensor.AvgPool2D();
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 0}), 0);
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 1, 0}), 1);
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 1}), 2);
-    ASSERT_EQ(ckks_tensor.GetIndex({1, 0, 0}), 1024);
-    ASSERT_EQ(ckks_tensor.GetIndex({2, 0, 0}), 2048);
-    ASSERT_THROW(ckks_tensor.GetIndex({3, 0, 0}), std::invalid_argument);
-    ASSERT_THROW(ckks_tensor.GetIndex({0, 0, 16}), std::invalid_argument);
-    ASSERT_THROW(ckks_tensor.GetIndex({0, 16, 0}), std::invalid_argument);
-
-    std::vector<double> new_image;
-    for (int i = 0; i < 11; ++i) {
-        std::copy(image.begin(), image.end(), std::back_inserter(new_image));
-    }
-
-    ckks_vector_.Encrypt(new_image);
-    ckks_tensor.SetData(ckks_vector_, {33, 32, 32});
-    ckks_tensor.SetStripe(0);
-
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 0}), 0);
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 1, 0}), 32);
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 1}), 1);
-    ASSERT_EQ(ckks_tensor.GetIndex({1, 0, 0}), 1024);
-    ASSERT_EQ(ckks_tensor.GetIndex({2, 0, 0}), 2048);
-    ASSERT_EQ(ckks_tensor.GetIndex({3, 0, 0}), 3072);
-    ASSERT_EQ(ckks_tensor.GetIndex({14, 0, 0}), 14 * 1024);
-    ASSERT_THROW(ckks_tensor.GetIndex({33, 0, 0}), std::invalid_argument);
-    ASSERT_THROW(ckks_tensor.GetIndex({0, 0, 32}), std::invalid_argument);
-    ASSERT_THROW(ckks_tensor.GetIndex({0, 32, 0}), std::invalid_argument);
-
-    ckks_tensor = ckks_tensor.AvgPool2D();
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 0}), 0);
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 1, 0}), 1);
-    ASSERT_EQ(ckks_tensor.GetIndex({0, 0, 1}), 2);
-    ASSERT_EQ(ckks_tensor.GetIndex({1, 0, 0}), 1024);
-    ASSERT_EQ(ckks_tensor.GetIndex({2, 0, 0}), 2048);
-    ASSERT_EQ(ckks_tensor.GetIndex({3, 0, 0}), 3072);
-    ASSERT_EQ(ckks_tensor.GetIndex({7, 0, 0}), 1024 * 7);
-    ASSERT_EQ(ckks_tensor.GetIndex({8, 0, 0}), 256);
-    ASSERT_EQ(ckks_tensor.GetIndex({32, 0, 0}), 32 * 256 + 32);
-    ASSERT_THROW(ckks_tensor.GetIndex({33, 0, 0}), std::invalid_argument);
-    ASSERT_THROW(ckks_tensor.GetIndex({0, 0, 16}), std::invalid_argument);
-    ASSERT_THROW(ckks_tensor.GetIndex({0, 16, 0}), std::invalid_argument);
 }

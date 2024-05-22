@@ -272,33 +272,3 @@ CkksTensor CkksTensor::AvgPool2D() {
 
     return CkksTensor(output_data, new_shape);
 }
-
-unsigned CkksTensor::GetIndex(fhenom::shape_t position) const {
-    const auto channel      = position[0];
-    const auto row          = position[1];
-    const auto col          = position[2];
-    const auto channel_size = shape_[1] * shape_[2];
-
-    if (channel >= shape_[0] || row >= shape_[1] || col >= shape_[2]) {
-        spdlog::error("Position ({}, {}, {}) is out of bounds for shape ({}, {}, {})", channel, row, col, shape_[0],
-                      shape_[1], shape_[2]);
-        throw std::invalid_argument("Position is out of bounds");
-    }
-
-    if (stripe_ == 0) {
-        return channel * channel_size + row * shape_[2] + col;
-    }
-
-    const auto crypto_context          = data_.GetContext().GetCryptoContext();
-    const auto batch_size              = crypto_context->GetEncodingParams()->GetBatchSize();
-    const auto channels_per_ciphertext = batch_size / channel_size;
-    const auto ctxt_offset             = (channel / channels_per_ciphertext) * batch_size;
-    const auto ch_block_offset         = (channel / (channels_per_ciphertext / 4)) * channel_size;
-    const auto ch_offset               = (channel % (channels_per_ciphertext / 4)) * 2 * shape_[2];
-    const auto row_offset              = (row / 2) * 8 * shape_[2] + (row % 2);
-    const auto col_offset              = 2 * col;
-
-    const auto index = ctxt_offset + ch_block_offset + ch_offset + row_offset + col_offset;
-
-    return index;
-}
