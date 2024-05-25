@@ -287,25 +287,48 @@ TEST_F(CkksTensorTest, AvgPool2D) {
             ASSERT_NEAR(decrypted[row / 2 * 16 + col / 2], avg, 0.001);
         }
     }
-
-    std::vector<double> new_image;
-    for (int i = 0; i < 11; ++i) {
-        std::copy(image.begin(), image.end(), std::back_inserter(new_image));
-    }
-
-    ckks_vector_.Encrypt(new_image);
-    ckks_tensor.SetData(ckks_vector_, {33, 32, 32});
-    ckks_tensor.AvgPool2D();
 }
 
-TEST_F(CkksTensorTest, ReLU) {
-    uint32_t scale_mod_size = 48;
-    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> params;
+TEST_F(CkksTensorTest, AvgPool2DCifarOutput) {
+    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ckks_parameters;
+    ckks_parameters.SetMultiplicativeDepth(20);
+    ckks_parameters.SetScalingModSize(59);
+    ckks_parameters.SetFirstModSize(60);
+    ckks_parameters.SetScalingTechnique(lbcrypto::FLEXIBLEAUTO);
+    ckks_parameters.SetSecurityLevel(lbcrypto::HEStd_128_classic);
+    ckks_parameters.SetRingDim(65536);
+    ckks_parameters.SetSecretKeyDist(lbcrypto::UNIFORM_TERNARY);
+    ckks_parameters.SetKeySwitchTechnique(lbcrypto::HYBRID);
 
-    usint depth = 4;
-    params.SetMultiplicativeDepth(depth);
-    params.SetScalingModSize(scale_mod_size);
-    params.SetRingDim(32768);
+    context_ = Context{ckks_parameters};
+    spdlog::debug("Generating keys...");
+    context_.GenerateKeys();
+    spdlog::debug("Generating rotate keys...");
+    context_.GenerateRotateKeys({1,     2,     4,     8,     16,    32,    64,    128,   256,   512,
+                                 1024,  2048,  4096,  8192,  16384, 32768, -1,    -2,    -4,    -8,
+                                 -16,   -32,   3072,  4096,  5120,  6144,  7168,  9216,  10240, 11264,
+                                 12288, 13312, 14336, 15360, 16384, 17408, 18432, 19456, 20480, 21504,
+                                 22528, 23552, 24576, 25600, 26624, 27648, 28672, 29696, 30720, 31744});
+
+    auto file        = std::ifstream("testData/relu_output.json");
+    auto relu_output = json::parse(file).get<std::vector<double>>();
+
+    CkksVector relu_vec(context_);
+    relu_vec.Encrypt(relu_output);
+    CkksTensor relu_tensor(relu_vec, {16, 32, 32});
+
+    auto avg_pool_output    = relu_tensor.AvgPool2D();
+    auto avg_pool_decrypted = avg_pool_output.GetData().Decrypt();
+    ASSERT_NEAR(avg_pool_decrypted[0], (relu_output[0] + relu_output[1] + relu_output[32] + relu_output[33]) / 4,
+                0.001);
+}
+
+TEST_F(CkksTensorTest, ReLU4) {
+    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> params;
+    params.SetMultiplicativeDepth(4);
+    params.SetScalingModSize(59);
+    params.SetRingDim(16384);
+    params.SetSecurityLevel(lbcrypto::HEStd_128_classic);
 
     fhenom::Context context(params);
     context.GenerateKeys();
@@ -313,6 +336,126 @@ TEST_F(CkksTensorTest, ReLU) {
     std::vector<double> relu_data(201);
     std::iota(relu_data.begin(), relu_data.end(), -100.0);
     std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.01; });
+
+    CkksVector vec(context);
+    vec.Encrypt(relu_data);
+    CkksTensor tensor(vec, {201});
+
+    double epsilon     = 0.01;
+    auto compute_error = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
+        std::vector<double> error(data.size());
+        for (unsigned i = 0; i < data.size(); ++i) {
+            error[i] = std::abs(result[i] - std::max(0.0, data[i]));
+        }
+
+        return error;
+    };
+
+    spdlog::debug("ReLU(4)");
+    auto result         = tensor.ReLU(4).GetData().Decrypt();
+    auto error          = compute_error(result, relu_data);
+    auto number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {0:.0f}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+}
+
+TEST_F(CkksTensorTest, ReLU12) {
+    std::vector<double> relu_data(201);
+    std::iota(relu_data.begin(), relu_data.end(), -100.0);
+    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.01; });
+
+    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> params;
+    params.SetMultiplicativeDepth(12);
+    params.SetScalingModSize(59);
+    params.SetRingDim(65536);
+    params.SetSecurityLevel(lbcrypto::HEStd_128_classic);
+
+    fhenom::Context context(params);
+    context.GenerateKeys();
+
+    fhenom::CkksVector vec(context);
+    vec.Encrypt(relu_data);
+    CkksTensor tensor(vec, {201});
+
+    auto epsilon       = 0.01;
+    auto compute_error = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
+        std::vector<double> error(data.size());
+        for (unsigned i = 0; i < data.size(); ++i) {
+            error[i] = std::abs(result[i] - std::max(0.0, data[i]));
+        }
+
+        return error;
+    };
+
+    ASSERT_EQ(vec.GetData()[0]->GetLevel(), 0);
+    auto result = tensor.ReLU(12);
+    ASSERT_EQ(result.GetData().GetData()[0]->GetLevel(), 12);
+    auto decrypted = result.GetData().Decrypt();
+
+    auto error          = compute_error(decrypted, relu_data);
+    auto number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {0:.2f}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+}
+
+TEST_F(CkksTensorTest, ScaledReLU12) {
+    std::vector<double> relu_data(201);
+    std::iota(relu_data.begin(), relu_data.end(), -100.0);
+    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.02; });
+
+    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> params;
+    params.SetMultiplicativeDepth(12);
+    params.SetScalingModSize(59);
+    params.SetRingDim(65536);
+    params.SetSecurityLevel(lbcrypto::HEStd_128_classic);
+
+    fhenom::Context context(params);
+    context.GenerateKeys();
+
+    fhenom::CkksVector vec(context);
+    vec.Encrypt(relu_data);
+    CkksTensor tensor(vec, {201});
+
+    auto epsilon       = 0.01;
+    auto compute_error = [](std::vector<double> result, std::vector<double> data) -> std::vector<double> {
+        std::vector<double> error(data.size());
+        for (unsigned i = 0; i < data.size(); ++i) {
+            error[i] = std::abs(result[i] - std::max(0.0, data[i]));
+        }
+
+        return error;
+    };
+
+    ASSERT_EQ(vec.GetData()[0]->GetLevel(), 0);
+    auto result = tensor.ReLU(12, 2);
+    ASSERT_EQ(result.GetData().GetData()[0]->GetLevel(), 12);
+    auto decrypted = result.GetData().Decrypt();
+
+    auto error          = compute_error(decrypted, relu_data);
+    auto number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
+    spdlog::debug("Number correct: {}", number_correct);
+    spdlog::debug("Percent correct: {0:.2f}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
+    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+}
+
+TEST_F(CkksTensorTest, ScaledReLU6) {
+    lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> params;
+
+    params.SetMultiplicativeDepth(6);
+    params.SetScalingModSize(59);
+    params.SetRingDim(32768);
+
+    fhenom::Context context(params);
+    context.GenerateKeys();
+
+    std::vector<double> relu_data(201);
+    std::iota(relu_data.begin(), relu_data.end(), -100.0);
+    std::transform(relu_data.begin(), relu_data.end(), relu_data.begin(), [](double x) { return x * 0.02; });
 
     CkksVector vec(context);
     vec.Encrypt(relu_data);
@@ -328,38 +471,13 @@ TEST_F(CkksTensorTest, ReLU) {
         return error;
     };
 
-    spdlog::debug("ReLU(4)");
-    auto result         = tensor.ReLU(4).GetData().Decrypt();
-    auto error          = compute_error(result, relu_data);
+    auto result = tensor.ReLU(6, 2);
+
+    auto decrypted      = result.GetData().Decrypt();
+    auto error          = compute_error(decrypted, relu_data);
     auto number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
     spdlog::debug("Number correct: {}", number_correct);
-    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
-    spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
-    spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
-
-    scale_mod_size = 48;
-    depth          = 12;
-    params.SetMultiplicativeDepth(depth);
-    params.SetScalingModSize(scale_mod_size);
-    params.SetRingDim(32768);
-    params.SetSecurityLevel(lbcrypto::HEStd_NotSet);
-
-    context = fhenom::Context(params);
-    context.GenerateKeys();
-
-    vec = fhenom::Context(context);
-    vec.Encrypt(relu_data);
-    tensor = CkksTensor(vec, {201});
-
-    epsilon = 0.001;
-
-    spdlog::debug("Computing ReLU(11)...");
-    result = tensor.ReLU(11).GetData().Decrypt();
-
-    error          = compute_error(result, relu_data);
-    number_correct = std::count_if(error.begin(), error.end(), [epsilon](double x) { return x < epsilon; });
-    spdlog::debug("Number correct: {}", number_correct);
-    spdlog::debug("Percent correct: {}%", static_cast<double>(number_correct) / relu_data.size() * 100);
+    spdlog::debug("Percent correct: {0:.2f}%", static_cast<double>(number_correct) / relu_data.size() * 100);
     spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
     spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
 }

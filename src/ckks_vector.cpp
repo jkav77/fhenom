@@ -122,13 +122,12 @@ CkksVector CkksVector::GetSum() const {
 
     auto crypto_context = context_.GetCryptoContext();
     size_t batch_size   = crypto_context->GetEncodingParams()->GetBatchSize();
+    auto sum_ctxt       = crypto_context->EvalAddMany(data_);
 
-    Ctxt result = crypto_context->EvalSum(data_[0], batch_size);
-    for (unsigned i = 1; i < data_.size(); ++i) {
-        result += crypto_context->EvalSum(data_[i], batch_size);
+    for (unsigned i = 0; i < log2(batch_size); ++i) {
+        crypto_context->EvalAddInPlace(sum_ctxt, crypto_context->EvalRotate(sum_ctxt, 1 << i));
     }
-
-    return CkksVector(std::vector<Ctxt>{result}, 1, context_);
+    return CkksVector(std::vector<Ctxt>{sum_ctxt}, 1, context_);
 }
 
 CkksVector CkksVector::GetCount(const double value, const double max_value) const {
@@ -231,7 +230,6 @@ CkksVector& CkksVector::operator*=(const std::vector<double>& rhs) {
         auto values_slice = std::vector<double>(start, end);
         data_[i]          = crypto_context->EvalMult(data_[i], crypto_context->MakeCKKSPackedPlaintext(values_slice));
     }
-    spdlog::debug("Level after scalar multiplication: {}", data_[0]->GetLevel());
 
     return *this;
 }

@@ -21,14 +21,24 @@ public:
     // Homomorphic Operations
 
     /**
+     * @brief Apply a fully connected layer to the CkksTensor
+     * 
+     * @param weights a tensor representing the weights, should have shape [input_size, output_size]
+     * @param bias a tensor of the biases
+     * @return fhenom::CkksTensor the transformed tensor
+     */
+    fhenom::CkksTensor Dense(const fhenom::Tensor& weights, const fhenom::Tensor& bias) const;
+
+    /**
    * @brief Apply the kernel to the CkksTensor
    *
    * @param kernel A tensor representing the kernel to apply
+   * @param bias A tensor of the biases
    * @return fhenom::CkksTensor The result of the convolution
    *
    * @note The kernel must have the same number of dimensions as the CkksTensor
    */
-    fhenom::CkksTensor Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias);
+    fhenom::CkksTensor Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias) const;
 
     /**
      * @brief Apply average pooling to the CkksTensor
@@ -37,15 +47,18 @@ public:
      * 
      * @note This method only does average pooling with a 2x2 window
      */
-    fhenom::CkksTensor AvgPool2D();
+    fhenom::CkksTensor AvgPool2D() const;
 
     /**
      * @brief Rectified linear unit (ReLU) activation function
      * 
      * @param depth The depth of the approximation (4 or 11)
+     * @param scale Scaling factor to bring x into [-1,1]
      * @return CkksTensor the ReLU of the tensor
+     * 
+     * @note This returns (x + x * sign(x/scale)) / 2
      */
-    CkksTensor ReLU(unsigned depth = 4) const;
+    CkksTensor ReLU(unsigned depth = 4, double scale = 1) const;
 
     //////////////////////////////////////////////////////////////////////////////
     // Getters and Setters
@@ -64,6 +77,6 @@ public:
     //////////////////////////////////////////////////////////////////////////////
     // Utility Functions
 
-    std::vector<CkksVector> rotate_images(const shape_t& kernel_shape);
+    std::vector<CkksVector> rotate_images(const shape_t& kernel_shape) const;
 };
 }  // namespace fhenom

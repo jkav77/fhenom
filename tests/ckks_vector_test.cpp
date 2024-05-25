@@ -17,8 +17,9 @@ protected:
     const std::vector<double> test_data_{0, 1, -1, 16, -16, 5, 50, 2, 10, 1, 2, 3, 4, 5, 17};
     const std::vector<double> testDomain_{0, 1, 2, 4, 8, 16, 32, 64, 96, 100};
     const std::filesystem::path test_data_dir_{"testData/ckks_vector"};
-    const std::vector<int> rotation_indices_{1,  2,  4,  8,  16,  32,  64,  128,  256,  512,  1024,  2048,
-                                             -1, -2, -4, -8, -16, -32, -64, -128, -256, -512, -1024, -2048};
+    const std::vector<int> rotation_indices_{1,    2,    4,    8,    16,    32,    64,    128,   256,   512,
+                                             1024, 2048, 4096, 8192, 16384, -1,    -2,    -4,    -8,    -16,
+                                             -32,  -64,  -128, -256, -512,  -1024, -2048, -4096, -8192, -16384};
 
     double epsilon_ = 0.01;
 
@@ -157,7 +158,7 @@ TEST_F(CkksVectorTest, IsEqual) {
 
 TEST_F(CkksVectorTest, GetSum) {
     auto ring_dim = precise_vector_.GetContext().GetCryptoContext()->GetRingDimension();
-    precise_context_.GenerateSumKey();
+    precise_context_.GenerateRotateKeys(rotation_indices_);
 
     precise_vector_.Encrypt(std::vector<double>(ring_dim * 1.25, 1));
     auto result    = precise_vector_.GetSum();

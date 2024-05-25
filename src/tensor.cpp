@@ -18,7 +18,7 @@ void Tensor::SetData(const std::vector<double>& data, const fhenom::shape_t& sha
     }
 
     if (len != data.size()) {
-        spdlog::debug("Data size {} does not match shape {}", data.size(), len);
+        spdlog::error("Data size {} does not match shape {}", data.size(), len);
         throw std::invalid_argument("Data size does not match shape");
     }
 
