@@ -8,6 +8,7 @@
 #include <cereal/archives/binary.hpp>
 #include <filesystem>
 #include <vector>
+#include "tensor.h"
 
 namespace fhenom {
 
@@ -190,6 +191,24 @@ public:
     CkksVector& operator+=(const double& rhs);
 
     /**
+     * @brief Add a plaintext vector to this vector
+     * 
+     * @param rhs the plaintext vector to add
+     * @return the addition result
+     */
+    CkksVector& operator+=(const std::vector<double>& rhs);
+
+    /**
+     * @brief Add a plaintext tensor to this vector
+     * 
+     * @param rhs the tensor to add
+     * @return CkksVector& the addition result
+     */
+    inline CkksVector& operator+=(const fhenom::Tensor& rhs) {
+        return *this += rhs.GetData();
+    }
+
+    /**
      * @brief Elementwise subtraction
      *
      * @param rhs
@@ -202,6 +221,14 @@ public:
     }
 
     friend CkksVector operator-(const double& lhs, CkksVector rhs);
+
+    /**
+     * @brief Add together a list of vectors
+     * 
+     * @param vectors the list of vectors to add
+     * @return the result of element-wise addition
+     */
+    static CkksVector AddMany(const std::vector<CkksVector>& vectors);
 
     /**
      * @brief Precompute rotations to use fast rotations
@@ -224,10 +251,9 @@ public:
      * @brief Condense the ciphertexts in the vector to the first `num_elements`
      * 
      * @param num_elements The number of elements to keep from each ciphertext
-     * @param max_ctxts The maximum number of ciphertexts to condense into one. If 0, as many ciphertexts are condensed as possible.
      * @note This method assumes all ciphertexts are already masked with zeroes outside the elements to keep.
      */
-    void Condense(unsigned num_elements, unsigned max_ctxts = 0);
+    void Condense(unsigned num_elements);
 
     // /**
     //  * @brief Create a vector consisting of the first `num_elements` slots of each of the parameter vectors
@@ -349,5 +375,13 @@ inline fhenom::CkksVector operator*(fhenom::CkksVector lhs, const double& rhs) {
 }
 
 inline fhenom::CkksVector operator+(fhenom::CkksVector lhs, const fhenom::CkksVector& rhs) {
+    return lhs += rhs;
+}
+
+inline fhenom::CkksVector operator+(fhenom::CkksVector lhs, const fhenom::Tensor& rhs) {
+    return lhs += rhs;
+}
+
+inline fhenom::CkksVector operator+(fhenom::CkksVector lhs, const std::vector<double>& rhs) {
     return lhs += rhs;
 }

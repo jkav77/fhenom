@@ -61,5 +61,15 @@ public:
      * @return double the stored value
      */
     double Get(const shape_t& coordinates) const;
+
+    /**
+     * @brief Tells cereal how to serialize this class
+     *
+     * @tparam Archive
+     * @param archive
+     */
+    template <class Archive>
+    void serialize(Archive& archive);
 };
+
 }  // namespace fhenom

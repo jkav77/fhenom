@@ -40,12 +40,15 @@ std::vector<fhenom::CkksVector> CkksTensor::rotate_images(const fhenom::shape_t&
     auto padding         = (kernel_num_rows - 1) / 2;
 
     std::vector<fhenom::CkksVector> rotated_images(kernel_size);
+    auto new_data = data_;
+    new_data.PrecomputeRotations();
 
 #pragma omp parallel for
     for (unsigned idx = 0; idx < kernel_size; ++idx) {
-        const auto row                              = idx / kernel_num_cols;
-        const auto col                              = idx % kernel_num_cols;
-        rotated_images[row * kernel_num_cols + col] = data_.Rotate((row - padding) * data_num_cols + (col - padding));
+        const auto row = idx / kernel_num_cols;
+        const auto col = idx % kernel_num_cols;
+        rotated_images[row * kernel_num_cols + col] =
+            new_data.Rotate((row - padding) * data_num_cols + (col - padding));
     }
 
     return rotated_images;
@@ -73,23 +76,35 @@ CkksTensor CkksTensor::Dense(const Tensor& weights, const Tensor& bias) const {
         throw std::invalid_argument("Input size does not match number of weights");
     }
 
-    CkksVector output_data(data_.GetContext());
+    std::vector<CkksVector> channel_outputs(num_outputs);
+#pragma omp parallel for
     for (unsigned output_index = 0; output_index < num_outputs; ++output_index) {
-        CkksVector output_channel(data_.GetContext());
-        for (unsigned input_index = 0; input_index < num_inputs; ++input_index) {
-            if (output_channel.size() == 0) {
-                output_channel = data_ * weights.Get({input_index, output_index});
-            }
-            else {
-                output_channel += data_ * weights.Get({input_index, output_index});
-            }
-        }
-        output_channel += bias.Get({output_index});
-        output_data.Concat(output_channel);
+        // Multiply by weights
+        auto weights_start = weights.GetData().begin() + flattened_shape * output_index;
+        auto weights_end   = weights_start + flattened_shape;
+        std::vector<double> ctxt_weights(weights_start, weights_end);
+        CkksVector output_channel = data_ * ctxt_weights;
+
+        // Sum up the results
+        output_channel = output_channel.GetSum();
+
+        // Mask the correct index
+        std::vector<double> mask(num_outputs);
+        mask[output_index] = 1;
+        output_channel *= mask;
+
+        // Add to vector of results
+        channel_outputs[output_index] = output_channel;
     }
 
+    // EvalAddMany the results
+    auto output_data = CkksVector::AddMany(channel_outputs);
+
+    // Add the bias
+    output_data += bias;
+
     output_data.SetNumElements(num_outputs);
-    return CkksTensor(output_data, {shape_[0], num_outputs});
+    return CkksTensor(output_data, {num_outputs});
 }
 
 std::pair<bool, std::string> validate_conv2d_input(const fhenom::Tensor& kernel, const fhenom::Tensor& bias,
@@ -201,20 +216,23 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
         }
 
         // Multiply the rotated images by the kernel vectors and add up the results
-        CkksVector filter_output(data_.GetContext());
+        std::vector<CkksVector> filter_outputs(kernel_size);
+#pragma omp parallel for
         for (unsigned kernel_index = 0; kernel_index < kernel_size; ++kernel_index) {
-            if (filter_output.size() == 0) {
-                filter_output = rotated_images[kernel_index] * filter[kernel_index];
-            }
-            else {
-                filter_output += rotated_images[kernel_index] * filter[kernel_index];
-            }
+            filter_outputs[kernel_index] = rotated_images[kernel_index] * filter[kernel_index];
         }
 
+        auto filter_output = CkksVector::AddMany(filter_outputs);
+        filter_output.PrecomputeRotations();
+
         // Consolidate the output of every filter channel in the first channel
-        for (unsigned channel_index = 1; channel_index < num_channels; ++channel_index) {
-            filter_output += filter_output.Rotate(channel_index * channel_size);
+        std::vector<CkksVector> channel_vectors(num_channels);
+#pragma omp parallel for
+        for (unsigned channel_index = 0; channel_index < num_channels; ++channel_index) {
+            channel_vectors[channel_index] = filter_output.Rotate(channel_index * channel_size);
         }
+
+        filter_output = CkksVector::AddMany(channel_vectors);
 
         // Zero out the other channels
         std::vector<double> filter_mask(num_channels * channel_size, 0);
@@ -223,6 +241,7 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
         filter_output *= filter_mask;
         filter_output.SetNumElements(channel_size);
 
+        spdlog::debug("Conv2D: adding filter {} ({}) to output", filter_index, filter_output.size());
         conv_output.Concat(filter_output);
     }
 
@@ -285,7 +304,11 @@ CkksTensor CkksTensor::AvgPool2D() const {
     for (int i = 0; i < log2(new_shape[0]) - 1; ++i) {
         auto num_rotations  = std::min(static_cast<unsigned>(4), new_shape[0] / (1 << i));
         unsigned block_size = new_channel_size * pow(4, i);
+        if (16 * block_size > batch_size) {
+            break;
+        }
 
+        // Move channels into position
         if (num_rotations == 4) {
             output_data.PrecomputeRotations();
         }
@@ -295,10 +318,10 @@ CkksTensor CkksTensor::AvgPool2D() const {
             auto rotation_amount = 3 * j * block_size;
             rotations[j - 1]     = output_data.Rotate(rotation_amount);
         }
+
         for (auto& ctxt : rotations) {
             output_data += ctxt;
         }
-
         // Mask in the first and mask out the next three (channels / block of 4 channels / block of 16 channels / etc.)
         std::fill(mask.begin(), mask.end(), 0);
 #pragma omp parallel for
@@ -309,11 +332,20 @@ CkksTensor CkksTensor::AvgPool2D() const {
         output_data *= mask;
     }
 
+    {
+        auto avg_pool_decrypted = output_data.Decrypt();
+        spdlog::debug("Decrypted[0] after condense channels: {}", avg_pool_decrypted[0]);
+    }
+
     // Condense Ciphertexts
     output_data.Condense(batch_size / 4);
 
-    output_data.SetNumElements(new_shape[0] * new_shape[1] * new_shape[2]);
+    {
+        auto avg_pool_decrypted = output_data.Decrypt();
+        spdlog::debug("Decrypted[0] after condense ctxts: {}", avg_pool_decrypted[0]);
+    }
 
+    output_data.SetNumElements(new_shape[0] * new_shape[1] * new_shape[2]);
     return CkksTensor(output_data, new_shape);
 }
 
@@ -327,6 +359,10 @@ CkksTensor CkksTensor::ReLU(unsigned depth, double scale) const {
     };
 
     CkksVector relu;
+
+    if (scale != 1.0) {
+        depth--;
+    }
 
     switch (depth) {
         case 4:

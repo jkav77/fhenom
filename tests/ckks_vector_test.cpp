@@ -297,6 +297,14 @@ TEST_F(CkksVectorTest, Addition) {
     ASSERT_NEAR(result[0], 2 * test_data_[0], epsilon_);
 }
 
+TEST_F(CkksVectorTest, AddMany) {
+    CkksVector test_result = CkksVector::AddMany({ckks_vector_, ckks_vector_, ckks_vector_});
+    auto decrypted         = test_result.Decrypt();
+    ASSERT_NEAR(decrypted[0], test_data_[0] * 3, epsilon_);
+    ASSERT_EQ(decrypted.size(), test_data_.size());
+    ASSERT_EQ(ckks_vector_.size(), test_data_.size());
+}
+
 TEST_F(CkksVectorTest, Concat) {
     context_.GenerateRotateKeys(rotation_indices_);
     auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
@@ -317,6 +325,7 @@ TEST_F(CkksVectorTest, Concat) {
     ASSERT_NEAR(decrypted_values[batch_size * 0.5], 0, epsilon_);
 
     test_vector.Concat(vector_2);
+    ASSERT_EQ(test_vector.GetData().size(), 2);
 
     ASSERT_EQ(test_vector.size(), batch_size * 1.25);
     decrypted_values = test_vector.Decrypt();

@@ -60,6 +60,7 @@ CkksVector CkksVector::EvalChebyshev(const std::function<double(double)>& func, 
     }
 
     std::vector<Ctxt> result(data_.size());
+#pragma omp parallel for
     for (unsigned i = 0; i < data_.size(); ++i) {
         result[i] = crypto_context->EvalChebyshevFunction(func, data_[i], lower_bound, upper_bound, degree);
     }
@@ -114,6 +115,32 @@ CkksVector CkksVector::IsEqual(const double value, const double max_value) const
     return 1 - (sign * sign);
 }
 
+CkksVector CkksVector::AddMany(const std::vector<CkksVector>& vectors) {
+    if (vectors.empty()) {
+        spdlog::error("Cannot add empty vectors.");
+        throw std::invalid_argument("Cannot add empty vectors.");
+    }
+
+    if (vectors.size() == 1) {
+        return vectors[0];
+    }
+
+    auto crypto_context = vectors[0].GetContext().GetCryptoContext();
+
+    std::vector<Ctxt> result_data(vectors[0].GetData().size());
+
+#pragma omp parallel for
+    for (unsigned i = 0; i < result_data.size(); ++i) {
+        std::vector<Ctxt> ctxts;
+        for (const auto& vec : vectors) {
+            ctxts.push_back(vec.data_[i]);
+        }
+        result_data[i] = crypto_context->EvalAddMany(ctxts);
+    }
+
+    return CkksVector(result_data, vectors[0].size(), vectors[0].GetContext());
+}
+
 CkksVector CkksVector::GetSum() const {
     if (size() == 0) {
         spdlog::error("Data is empty. Cannot sum.");
@@ -122,7 +149,14 @@ CkksVector CkksVector::GetSum() const {
 
     auto crypto_context = context_.GetCryptoContext();
     size_t batch_size   = crypto_context->GetEncodingParams()->GetBatchSize();
-    auto sum_ctxt       = crypto_context->EvalAddMany(data_);
+
+    Ctxt sum_ctxt;
+    if (data_.size() == 1) {
+        sum_ctxt = data_[0];
+    }
+    else {
+        sum_ctxt = crypto_context->EvalAddMany(data_);
+    }
 
     for (unsigned i = 0; i < log2(batch_size); ++i) {
         crypto_context->EvalAddInPlace(sum_ctxt, crypto_context->EvalRotate(sum_ctxt, 1 << i));
@@ -149,6 +183,7 @@ CkksVector CkksVector::GetCount(const double value, const double max_value) cons
 }
 
 CkksVector CkksVector::Rotate(int rotation_index) const {
+    const auto batch_size = context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize();
     if (rotation_index == 0) {
         return *this;
     }
@@ -163,6 +198,11 @@ CkksVector CkksVector::Rotate(int rotation_index) const {
     if (size() == 0) {
         spdlog::error("Data is empty. Cannot rotate.");
         throw std::invalid_argument("Data is empty. Cannot rotate.");
+    }
+
+    if (std::abs(rotation_index) >= batch_size) {
+        spdlog::error("Cannot rotate by more than the batch size.");
+        throw std::invalid_argument("Cannot rotate by more than the batch size.");
     }
 
     std::vector<Ctxt> result   = data_;
@@ -189,9 +229,11 @@ CkksVector CkksVector::Rotate(int rotation_index) const {
         for (unsigned i = 0; i < result.size(); ++i) {
             try {
                 if (precomputed_rotations.empty()) {
+                    spdlog::debug("Slow rotating ciphertext by {} to get to {}", next_rotation_amount, rotation_index);
                     result[i] = crypto_context->EvalRotate(result[i], next_rotation_amount);
                 }
                 else {
+                    spdlog::debug("Fast rotating ciphertext by {} to get to {}", next_rotation_amount, rotation_index);
                     result[i] = crypto_context->EvalFastRotation(result[i], next_rotation_amount,
                                                                  crypto_context->GetCyclotomicOrder(),
                                                                  precomputed_rotations[i]);
@@ -283,6 +325,25 @@ CkksVector& CkksVector::operator+=(const double& rhs) {
     return *this;
 }
 
+CkksVector& CkksVector::operator+=(const std::vector<double>& rhs) {
+    size_t batch_size = context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize();
+    if (rhs.size() != size() && rhs.size() != data_.size() * batch_size) {
+        spdlog::error("Cannot add vectors of different sizes.");
+        throw std::invalid_argument("Cannot add vectors of different sizes.");
+    }
+
+    precomputedRotations_.clear();
+
+    for (unsigned i = 0; i < data_.size(); ++i) {
+        auto batch_rhs =
+            std::vector<double>(rhs.begin() + i * batch_size, rhs.begin() + std::min((i + 1) * batch_size, rhs.size()));
+        data_[i] = context_.GetCryptoContext()->EvalAdd(
+            data_[i], context_.GetCryptoContext()->MakeCKKSPackedPlaintext(batch_rhs));
+    }
+
+    return *this;
+}
+
 CkksVector& CkksVector::operator-=(const double& rhs) {
     precomputedRotations_.clear();
 
@@ -337,14 +398,17 @@ void CkksVector::Concat(const CkksVector& rhs) {
     }
 
     auto space_remaining = data_.size() * batch_size - numElements_;
+    spdlog::debug("Concatenating onto vector with {} ctxts and {} elements.", data_.size(), numElements_);
 
     if (space_remaining == 0) {
         std::copy(rhs.data_.begin(), rhs.data_.end(), std::back_inserter(data_));
-        numElements_ = data_.size() * batch_size + rhs.size();
+        spdlog::debug("Concatenating rhs: adding {} new ctxts to {} total.", rhs.data_.size(), data_.size());
+        numElements_ += rhs.size();
         return;
     }
 
     if (space_remaining >= rhs.size()) {
+        spdlog::debug("Concatenating rhs: {} space remaining for {} elements.", space_remaining, rhs.size());
         data_.back() += rhs.Rotate(space_remaining).data_.front();
         numElements_ += rhs.size();
         return;
@@ -360,35 +424,42 @@ void CkksVector::Concat(const CkksVector& rhs) {
 
     auto tmp = rhs.Rotate(space_remaining);
     for (const auto& ctxt : tmp.data_) {
+        spdlog::debug("Concatenating rhs: adding new ctxt size {} with {} space remaining.", rhs.size(),
+                      space_remaining);
         crypto_context->EvalAddInPlace(data_.back(), crypto_context->EvalMult(ctxt, mask_first_part_ptxt));
         data_.push_back(crypto_context->EvalMult(ctxt, mask_second_part_ptxt));
     }
     numElements_ = size() + rhs.size();
 }
 
-void CkksVector::Condense(unsigned num_elements, unsigned max_ctxts) {
+void CkksVector::Condense(unsigned num_elements) {
     auto crypto_context   = context_.GetCryptoContext();
     const auto batch_size = crypto_context->GetEncodingParams()->GetBatchSize();
 
-    if (max_ctxts == 0) {
-        max_ctxts = batch_size / num_elements;
+    if (precomputedRotations_.empty()) {
+        PrecomputeRotations();
     }
 
-    auto new_ctxts = std::vector<Ctxt>(ceil(static_cast<double>(data_.size()) / max_ctxts));
-    for (unsigned rot_index = 0; rot_index < new_ctxts.size(); ++rot_index) {
-        auto ctxts = Rotate(-rot_index * num_elements).GetData();
-        for (unsigned index = 0; index < ctxts.size(); ++index) {
-            if (index % max_ctxts == 0) {
-                new_ctxts[index / max_ctxts] = std::move(ctxts[index]);
-            }
-            else {
-                new_ctxts[index / max_ctxts] += ctxts[index];
-            }
-        }
+    auto new_ctxts        = std::vector<Ctxt>(ceil(static_cast<double>(num_elements * data_.size()) / batch_size));
+    auto num_per_new_ctxt = std::min(batch_size / num_elements, static_cast<unsigned>(data_.size()));
+    auto new_num_elements = num_elements * data_.size();
+
+#pragma omp parallel for
+    for (unsigned i = 0; i < data_.size(); ++i) {
+        auto rotation_amount = (-i * num_elements) % batch_size;
+        data_[i]             = CkksVector({data_[i]}, num_elements, context_).Rotate(rotation_amount).GetData()[0];
     }
 
+#pragma omp parallel for
+    for (unsigned i = 0; i < new_ctxts.size(); ++i) {
+        auto start   = data_.begin() + i * num_per_new_ctxt;
+        auto end     = start + num_per_new_ctxt;
+        auto ctxts   = std::vector<Ctxt>(start, end);
+        new_ctxts[i] = crypto_context->EvalAddMany(ctxts);
+    }
+
+    numElements_ = new_num_elements;
     data_        = new_ctxts;
-    numElements_ = batch_size * data_.size();
 }
 
 // CkksVector CkksVector::Merge(const std::vector<CkksVector>& vectors, unsigned num_elements) {

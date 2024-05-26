@@ -55,3 +55,8 @@ void Tensor::Reshape(const shape_t& shape) {
         offsets_.push_back(std::reduce(it + 1, shape_.end(), 1, std::multiplies<int>{}));
     }
 }
+
+template <class Archive>
+void Tensor::serialize(Archive& archive) {
+    archive(shape_, data_);
+}

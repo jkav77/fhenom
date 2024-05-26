@@ -20,6 +20,11 @@ public:
     //////////////////////////////////////////////////////////////////////////////
     // Homomorphic Operations
 
+    inline CkksTensor& Bootstrap() {
+        data_.Bootstrap();
+        return *this;
+    }
+
     /**
      * @brief Apply a fully connected layer to the CkksTensor
      * 
