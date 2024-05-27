@@ -1,5 +1,6 @@
 #include <fhenom/tensor.h>
 #include <spdlog/spdlog.h>
+#include <cereal/archives/binary.hpp>
 
 #include <utility>
 #include <vector>
@@ -54,9 +55,4 @@ void Tensor::Reshape(const shape_t& shape) {
     for (auto it = shape_.begin(); it != shape_.end(); ++it) {
         offsets_.push_back(std::reduce(it + 1, shape_.end(), 1, std::multiplies<int>{}));
     }
-}
-
-template <class Archive>
-void Tensor::serialize(Archive& archive) {
-    archive(shape_, data_);
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include <cereal/archives/binary.hpp>
 
 #include <vector>
 
@@ -62,6 +63,8 @@ public:
      */
     double Get(const shape_t& coordinates) const;
 
+    friend class cereal::access;
+
     /**
      * @brief Tells cereal how to serialize this class
      *
@@ -69,7 +72,9 @@ public:
      * @param archive
      */
     template <class Archive>
-    void serialize(Archive& archive);
+    void serialize(Archive& archive) {
+        archive(shape_, data_);
+    }
 };
 
 }  // namespace fhenom
