@@ -56,37 +56,39 @@ std::vector<fhenom::CkksVector> CkksTensor::rotate_images(const fhenom::shape_t&
 
 CkksTensor CkksTensor::Dense(const Tensor& weights, const Tensor& bias) const {
     auto weights_shape = weights.GetShape();
-    auto num_inputs    = weights_shape[0];
-    auto num_outputs   = weights_shape[1];
-
-    if (bias.GetShape()[0] != num_outputs) {
-        spdlog::error("Bias shape ({}) does not match number of outputs ({})", bias.GetShape()[0], num_outputs);
-        throw std::invalid_argument("Bias shape does not match number of outputs");
-    }
+    auto num_inputs    = weights_shape[1];
+    auto num_outputs   = weights_shape[0];
 
     if (bias.GetShape().size() != 1) {
         spdlog::error("Bias should have one dimension (has {})", bias.GetShape().size());
         throw std::invalid_argument("Bias does not have one dimension");
     }
 
-    unsigned flattened_shape = std::accumulate(shape_.begin(), shape_.end(), 1, std::multiplies<>());
+    if (bias.GetShape()[0] != num_outputs) {
+        spdlog::error("Bias shape ({}) does not match number of outputs ({})", bias.GetShape()[0], num_outputs);
+        throw std::invalid_argument("Bias shape does not match number of outputs");
+    }
 
-    if (flattened_shape != num_inputs) {
-        spdlog::error("Input size ({}) does not match number of weights ({})", flattened_shape, num_inputs);
+    unsigned flattened_size = data_.size();
+
+    if (flattened_size != num_inputs) {
+        spdlog::error("Input size ({}) does not match number of weights ({})", flattened_size, num_inputs);
         throw std::invalid_argument("Input size does not match number of weights");
     }
 
     std::vector<CkksVector> channel_outputs(num_outputs);
+    auto weights_data = weights.GetData();
 #pragma omp parallel for
     for (unsigned output_index = 0; output_index < num_outputs; ++output_index) {
         // Multiply by weights
-        auto weights_start = weights.GetData().begin() + flattened_shape * output_index;
-        auto weights_end   = weights_start + flattened_shape;
+        auto weights_start = weights_data.begin() + flattened_size * output_index;
+        auto weights_end   = weights_start + flattened_size;
         std::vector<double> ctxt_weights(weights_start, weights_end);
         CkksVector output_channel = data_ * ctxt_weights;
 
         // Sum up the results
         output_channel = output_channel.GetSum();
+        output_channel.SetNumElements(10);
 
         // Mask the correct index
         std::vector<double> mask(num_outputs);
@@ -241,7 +243,6 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
         filter_output *= filter_mask;
         filter_output.SetNumElements(channel_size);
 
-        spdlog::debug("Conv2D: adding filter {} ({}) to output", filter_index, filter_output.size());
         conv_output.Concat(filter_output);
     }
 
@@ -332,18 +333,8 @@ CkksTensor CkksTensor::AvgPool2D() const {
         output_data *= mask;
     }
 
-    {
-        auto avg_pool_decrypted = output_data.Decrypt();
-        spdlog::debug("Decrypted[0] after condense channels: {}", avg_pool_decrypted[0]);
-    }
-
     // Condense Ciphertexts
     output_data.Condense(batch_size / 4);
-
-    {
-        auto avg_pool_decrypted = output_data.Decrypt();
-        spdlog::debug("Decrypted[0] after condense ctxts: {}", avg_pool_decrypted[0]);
-    }
 
     output_data.SetNumElements(new_shape[0] * new_shape[1] * new_shape[2]);
     return CkksTensor(output_data, new_shape);

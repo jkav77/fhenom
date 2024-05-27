@@ -144,7 +144,6 @@ void Context::SaveEvalMultKeys(const std::filesystem::path& path) const {
             throw std::filesystem::filesystem_error("Error writing serialization of the eval mult keys",
                                                     std::make_error_code(std::errc::io_error));
         }
-        spdlog::debug("The eval mult keys have been serialized.");
         emkeyfile.close();
     }
     else {
@@ -178,7 +177,6 @@ void Context::SaveEvalSumKeys(const std::filesystem::path& path) const {
             throw std::filesystem::filesystem_error("Error writing serialization of the eval sum keys",
                                                     std::make_error_code(std::errc::io_error));
         }
-        spdlog::debug("The eval sum keys have been serialized.");
         sum_key_ostream.close();
     }
     else {
@@ -213,7 +211,6 @@ void Context::SaveRotationKeys(const std::filesystem::path& path) const {
             throw std::filesystem::filesystem_error("Error writing serialization of the eval rotate keys",
                                                     std::make_error_code(std::errc::io_error));
         }
-        spdlog::debug("The eval rotate keys have been serialized.");
         rotate_key_file.close();
     }
     else {
@@ -229,7 +226,6 @@ void Context::SavePublicKey(const std::filesystem::path& path) const {
         throw std::filesystem::filesystem_error("Error writing serialization of public key",
                                                 std::make_error_code(std::errc::io_error));
     }
-    spdlog::debug("The public key has been serialized.");
 }
 
 void Context::LoadPublicKey(const std::filesystem::path& path) {
@@ -246,7 +242,6 @@ void Context::SaveSecretKey(const std::filesystem::path& path) const {
         throw std::filesystem::filesystem_error("Error writing serialization of secret key",
                                                 std::make_error_code(std::errc::io_error));
     }
-    spdlog::debug("The secret key has been serialized.");
 }
 
 void Context::LoadSecretKey(const std::filesystem::path& path) {

@@ -2,6 +2,7 @@
 #include <fhenom/tensor.h>
 #include "nlohmann/json.hpp"
 
+#include <cereal/archives/binary.hpp>
 #include "gtest/gtest.h"
 
 using fhenom::CkksTensor;
@@ -481,4 +482,65 @@ TEST_F(CkksTensorTest, ScaledReLU6) {
     spdlog::debug("Percent correct: {0:.2f}%", static_cast<double>(number_correct) / relu_data.size() * 100);
     spdlog::debug("Average error: {}", std::accumulate(error.begin(), error.end(), 0.0) / error.size());
     spdlog::debug("Max error: {}", *std::max_element(error.begin(), error.end()));
+}
+
+TEST(CkksTensor, Dense) {
+    spdlog::set_level(spdlog::level::debug);
+
+    Context context;
+    std::filesystem::path context_path{"testData/dense/context"};
+    if (std::filesystem::exists("context/cryptocontext.txt")) {
+        spdlog::debug("Loading context...");
+        context.Load(context_path);
+        context.LoadPublicKey(context_path / "public-key.txt");
+        context.LoadSecretKey(context_path / "secret-key.txt");
+    }
+    else {
+        spdlog::debug("Generating context...");
+        lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ckks_parameters;
+        ckks_parameters.SetMultiplicativeDepth(32);
+        ckks_parameters.SetScalingModSize(59);
+        ckks_parameters.SetFirstModSize(60);
+        ckks_parameters.SetSecurityLevel(lbcrypto::HEStd_128_classic);
+        ckks_parameters.SetRingDim(131072);
+        context = Context{ckks_parameters};
+
+        spdlog::debug("Generating keys...");
+        context.GenerateKeys();
+        spdlog::debug("Generating rotate keys...");
+        context.GenerateRotateKeys(
+            {1,         2,         4,         8,         16,        31,        32,        33,        64,
+             128,       256,       512,       1024,      2048,      3072,      4096,      8192,      16384,
+             32768,     -1,        -31,       -32,       -33,       5120,      6144,      7168,      9216,
+             10240,     11264,     12288,     13312,     14336,     15360,     17 * 1024, 18 * 1024, 19 * 1024,
+             20 * 1024, 21 * 1024, 22 * 1024, 23 * 1024, 24 * 1024, 25 * 1024, 26 * 1024, 27 * 1024, 28 * 1024,
+             29 * 1024, 30 * 1024, 31 * 1024, 32 * 1024, 33 * 1024, 34 * 1024, 35 * 1024, 36 * 1024, 37 * 1024,
+             38 * 1024, 39 * 1024, 40 * 1024, 41 * 1024, 42 * 1024, 43 * 1024, 44 * 1024, 45 * 1024, 46 * 1024,
+             47 * 1024, 48 * 1024, 49 * 1024, 50 * 1024, 51 * 1024, 52 * 1024, 53 * 1024, 54 * 1024, 55 * 1024,
+             56 * 1024, 57 * 1024, 58 * 1024, 59 * 1024, 60 * 1024, 61 * 1024, 62 * 1024, 63 * 1024});
+
+        context.Save(context_path);
+        context.SavePublicKey(context_path / "public-key.txt");
+        context.SaveSecretKey(context_path / "secret-key.txt");
+    }
+
+    std::filesystem::path relu3_path{"testData/dense/relu3_output"};
+    spdlog::debug("Loading relu3");
+    CkksVector relu3_data;
+    relu3_data.SetContext(context);
+    relu3_data.Load(relu3_path);
+
+    CkksTensor dense_input{relu3_data, {64, 32, 32}};
+
+    Tensor dense_weights;
+    Tensor dense_bias;
+    {
+        std::ifstream file{"testData/dense/dense_weights.bin"};
+        cereal::BinaryInputArchive archive{file};
+        archive(dense_weights, dense_bias);
+    }
+
+    auto output    = dense_input.Dense(dense_weights, dense_bias);
+    auto decrypted = output.GetData().Decrypt();
+    spdlog::debug("Dense input decrypted");
 }

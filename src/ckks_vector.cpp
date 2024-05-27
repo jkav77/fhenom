@@ -229,11 +229,9 @@ CkksVector CkksVector::Rotate(int rotation_index) const {
         for (unsigned i = 0; i < result.size(); ++i) {
             try {
                 if (precomputed_rotations.empty()) {
-                    spdlog::debug("Slow rotating ciphertext by {} to get to {}", next_rotation_amount, rotation_index);
                     result[i] = crypto_context->EvalRotate(result[i], next_rotation_amount);
                 }
                 else {
-                    spdlog::debug("Fast rotating ciphertext by {} to get to {}", next_rotation_amount, rotation_index);
                     result[i] = crypto_context->EvalFastRotation(result[i], next_rotation_amount,
                                                                  crypto_context->GetCyclotomicOrder(),
                                                                  precomputed_rotations[i]);
@@ -398,17 +396,14 @@ void CkksVector::Concat(const CkksVector& rhs) {
     }
 
     auto space_remaining = data_.size() * batch_size - numElements_;
-    spdlog::debug("Concatenating onto vector with {} ctxts and {} elements.", data_.size(), numElements_);
 
     if (space_remaining == 0) {
         std::copy(rhs.data_.begin(), rhs.data_.end(), std::back_inserter(data_));
-        spdlog::debug("Concatenating rhs: adding {} new ctxts to {} total.", rhs.data_.size(), data_.size());
         numElements_ += rhs.size();
         return;
     }
 
     if (space_remaining >= rhs.size()) {
-        spdlog::debug("Concatenating rhs: {} space remaining for {} elements.", space_remaining, rhs.size());
         data_.back() += rhs.Rotate(space_remaining).data_.front();
         numElements_ += rhs.size();
         return;
@@ -424,8 +419,6 @@ void CkksVector::Concat(const CkksVector& rhs) {
 
     auto tmp = rhs.Rotate(space_remaining);
     for (const auto& ctxt : tmp.data_) {
-        spdlog::debug("Concatenating rhs: adding new ctxt size {} with {} space remaining.", rhs.size(),
-                      space_remaining);
         crypto_context->EvalAddInPlace(data_.back(), crypto_context->EvalMult(ctxt, mask_first_part_ptxt));
         data_.push_back(crypto_context->EvalMult(ctxt, mask_second_part_ptxt));
     }
