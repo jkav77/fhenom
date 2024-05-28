@@ -10,6 +10,7 @@ protected:
     lbcrypto::CryptoContext<lbcrypto::DCRTPoly> crypto_context_;
     lbcrypto::KeyPair<lbcrypto::DCRTPoly> key_pair_;
     lbcrypto::SecurityLevel security_level_{lbcrypto::HEStd_NotSet};
+    size_t slotsPerCtxt_;
 
 public:
     Context() = default;
@@ -29,6 +30,14 @@ public:
 
     //////////////////////////////////////////////////////////////////////////////
     // Getters and Setters
+
+    size_t GetSlotsPerCtxt() const {
+        return slotsPerCtxt_;
+    }
+
+    void SetSlotsPerCtxt(size_t slots) {
+        slotsPerCtxt_ = slots;
+    }
 
     const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& GetCryptoContext() const {
         return crypto_context_;

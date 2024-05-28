@@ -19,6 +19,7 @@ Context::Context(lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> ccParams, bo
     crypto_context_->Enable(lbcrypto::LEVELEDSHE);
     crypto_context_->Enable(lbcrypto::ADVANCEDSHE);
     crypto_context_->Enable(lbcrypto::KEYSWITCH);
+    SetSlotsPerCtxt(crypto_context_->GetEncodingParams()->GetBatchSize());
     if (enable_fhe) {
         crypto_context_->Enable(lbcrypto::FHE);
     }

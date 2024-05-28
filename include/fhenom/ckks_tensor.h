@@ -52,7 +52,7 @@ public:
      * 
      * @note This method only does average pooling with a 2x2 window
      */
-    fhenom::CkksTensor AvgPool2D() const;
+    // fhenom::CkksTensor AvgPool2D() const;
 
     /**
      * @brief Rectified linear unit (ReLU) activation function

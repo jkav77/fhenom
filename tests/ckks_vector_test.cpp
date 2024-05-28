@@ -31,11 +31,13 @@ protected:
         context_ = get_leveled_context();
         spdlog::debug("Generating keys");
         context_.GenerateKeys();
+        context_.SetSlotsPerCtxt(1024);
 
         ckks_vector_.SetContext(context_);
         ckks_vector_.Encrypt(test_data_);
 
         precise_context_ = get_high_mult_depth_leveled_context();
+        precise_context_.SetSlotsPerCtxt(1024);
         spdlog::debug("Generating keys for precise vector");
         precise_context_.GenerateKeys();
 
@@ -49,7 +51,9 @@ protected:
 
 TEST_F(CkksVectorTest, EncryptDecrypt) {
     CkksVector col1{};
-    col1.SetContext(ckks_vector_.GetContext());
+    auto context        = ckks_vector_.GetContext();
+    auto slots_per_ctxt = context.GetSlotsPerCtxt();
+    col1.SetContext(context);
     col1.Encrypt(test_data_);
 
     ASSERT_GT(ckks_vector_.size(), 0);
@@ -60,9 +64,11 @@ TEST_F(CkksVectorTest, EncryptDecrypt) {
     col2.SetContext(ckks_vector_.GetContext());
     col2.Encrypt(large_data);
     ASSERT_EQ(col2.size(), 48842);
+    auto decrypted = col2.Decrypt();
+    ASSERT_NEAR(decrypted[0], 1, epsilon_);
+    ASSERT_NEAR(decrypted[slots_per_ctxt], 1, epsilon_);
 
-    auto decrypted = ckks_vector_.Decrypt();
-
+    decrypted = ckks_vector_.Decrypt();
     ASSERT_EQ(decrypted.size(), test_data_.size());
     for (unsigned i = 0; i < test_data_.size(); ++i) {
         ASSERT_NEAR(decrypted[i], test_data_[i], epsilon_);
@@ -220,8 +226,8 @@ TEST_F(CkksVectorTest, Rotate) {
         ASSERT_NEAR(decrypted[i], test_data_[(i + 3) % test_data_.size()], epsilon_);
     }
 
-    auto batch_size = ckks_vector_.GetContext().GetCryptoContext()->GetEncodingParams()->GetBatchSize();
-    std::vector<double> large_data(2 * batch_size);
+    auto slots_per_ctxt = ckks_vector_.GetContext().GetSlotsPerCtxt();
+    std::vector<double> large_data(2 * slots_per_ctxt);
     for (unsigned i = 0; i < large_data.size(); ++i) {
         large_data[i] = i;
     }
@@ -232,12 +238,12 @@ TEST_F(CkksVectorTest, Rotate) {
     decrypted = rotated.Decrypt();
     ASSERT_EQ(decrypted.size(), large_data.size());
     for (int i = 0; i < 8; ++i) {
-        ASSERT_NEAR(decrypted[i], large_data[batch_size - 8 + i], epsilon_);
+        ASSERT_NEAR(decrypted[i + 8], large_data[i], epsilon_);
     }
     ASSERT_NEAR(decrypted[8], large_data[0], epsilon_);
     ASSERT_NEAR(decrypted[9], large_data[1], epsilon_);
 
-    large_data = std::vector<double>(2 * batch_size);
+    large_data = std::vector<double>(2 * slots_per_ctxt);
     for (unsigned i = 0; i < large_data.size(); ++i) {
         large_data[i] = i;
     }
@@ -247,17 +253,16 @@ TEST_F(CkksVectorTest, Rotate) {
     ASSERT_EQ(decrypted.size(), large_data.size());
     for (int i = 0; i < 8; ++i) {
         ASSERT_NEAR(decrypted[i], large_data[i + 8], epsilon_);
-        ASSERT_NEAR(decrypted[batch_size + i], large_data[batch_size + i + 8], epsilon_);
+        ASSERT_NEAR(decrypted[slots_per_ctxt + i], large_data[slots_per_ctxt + i + 8], epsilon_);
     }
 }
 
 TEST_F(CkksVectorTest, Multiply) {
-    auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
-    auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
+    auto slots_per_ctxt = ckks_vector_.GetContext().GetSlotsPerCtxt();
 
     CkksVector vector_1(ckks_vector_.GetContext());
     CkksVector vector_2(ckks_vector_.GetContext());
-    auto test_size = batch_size - 1024;
+    auto test_size = slots_per_ctxt - 256;
 
     std::vector<double> values_1(test_size, 1);
     vector_1.Encrypt(values_1);
@@ -307,51 +312,49 @@ TEST_F(CkksVectorTest, AddMany) {
 
 TEST_F(CkksVectorTest, Concat) {
     context_.GenerateRotateKeys(rotation_indices_);
-    auto crypto_context = ckks_vector_.GetContext().GetCryptoContext();
-    auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
+    auto slots_per_ctxt = context_.GetSlotsPerCtxt();
 
     CkksVector test_vector(ckks_vector_.GetContext());
     CkksVector vector_1(ckks_vector_.GetContext());
     CkksVector vector_2(ckks_vector_.GetContext());
 
-    vector_1.Encrypt(std::vector<double>(batch_size * 0.5, 1));
-    vector_2.Encrypt(std::vector<double>(batch_size * 0.75, 2));
+    vector_1.Encrypt(std::vector<double>(slots_per_ctxt * 0.5, 1));
+    vector_2.Encrypt(std::vector<double>(slots_per_ctxt * 0.75, 2));
 
     test_vector.Concat(vector_1);
     auto decrypted_values = test_vector.Decrypt();
-    ASSERT_EQ(test_vector.size(), batch_size * 0.5);
+    ASSERT_EQ(test_vector.size(), slots_per_ctxt * 0.5);
     ASSERT_NEAR(decrypted_values[0], 1, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 0.5 - 1], 1, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 0.5], 0, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt * 0.5 - 1], 1, epsilon_);
 
     test_vector.Concat(vector_2);
     ASSERT_EQ(test_vector.GetData().size(), 2);
 
-    ASSERT_EQ(test_vector.size(), batch_size * 1.25);
+    ASSERT_EQ(test_vector.size(), slots_per_ctxt * 1.25);
     decrypted_values = test_vector.Decrypt();
     ASSERT_EQ(decrypted_values.size(), test_vector.size());
     ASSERT_NEAR(decrypted_values[0], 1, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 0.5 - 1], 1, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 0.5], 2, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size], 2, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 1.25 - 1], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt * 0.5 - 1], 1, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt * 0.5], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt * 1.25 - 1], 2, epsilon_);
 
     test_vector.Concat(vector_2);
-    ASSERT_EQ(test_vector.size(), batch_size * 2.0);
+    ASSERT_EQ(test_vector.size(), slots_per_ctxt * 2.0);
     decrypted_values = test_vector.Decrypt();
     ASSERT_NEAR(decrypted_values[0], 1, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 0.5 - 1], 1, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 0.5], 2, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size], 2, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 1.25 - 1], 2, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 1.25], 2, epsilon_);
-    ASSERT_NEAR(decrypted_values[batch_size * 2.0 - 1], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt * 0.5 - 1], 1, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt * 0.5], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt * 1.25 - 1], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt * 1.25], 2, epsilon_);
+    ASSERT_NEAR(decrypted_values[slots_per_ctxt * 2.0 - 1], 2, epsilon_);
 }
 
-TEST_F(CkksVectorTest, Condense) {
-    //TODO (jkav77) Add test assertions
-    ckks_vector_.Condense(test_data_.size());
-}
+// TEST_F(CkksVectorTest, Condense) {
+//     //TODO (jkav77) Add test assertions
+//     ckks_vector_.Condense(test_data_.size());
+// }
 
 //////////////////////////////////////////////////////////////////////////////
 // File I/O

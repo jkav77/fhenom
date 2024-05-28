@@ -247,13 +247,13 @@ public:
      */
     void Concat(const CkksVector& rhs);
 
-    /**
-     * @brief Condense the ciphertexts in the vector to the first `num_elements`
-     * 
-     * @param num_elements The number of elements to keep from each ciphertext
-     * @note This method assumes all ciphertexts are already masked with zeroes outside the elements to keep.
-     */
-    void Condense(unsigned num_elements);
+    // /**
+    //  * @brief Condense the ciphertexts in the vector to the first `num_elements`
+    //  *
+    //  * @param num_elements The number of elements to keep from each ciphertext
+    //  * @note This method assumes all ciphertexts are already masked with zeroes outside the elements to keep.
+    //  */
+    // void Condense(unsigned num_elements);
 
     // /**
     //  * @brief Create a vector consisting of the first `num_elements` slots of each of the parameter vectors
@@ -379,6 +379,10 @@ inline fhenom::CkksVector operator+(fhenom::CkksVector lhs, const fhenom::CkksVe
 }
 
 inline fhenom::CkksVector operator+(fhenom::CkksVector lhs, const fhenom::Tensor& rhs) {
+    return lhs += rhs;
+}
+
+inline fhenom::CkksVector operator+(fhenom::CkksVector lhs, const double rhs) {
     return lhs += rhs;
 }
 

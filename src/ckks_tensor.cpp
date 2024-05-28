@@ -224,25 +224,34 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
             filter_outputs[kernel_index] = rotated_images[kernel_index] * filter[kernel_index];
         }
 
-        auto filter_output = CkksVector::AddMany(filter_outputs);
-        filter_output.PrecomputeRotations();
-
-        // Consolidate the output of every filter channel in the first channel
-        std::vector<CkksVector> channel_vectors(num_channels);
-#pragma omp parallel for
-        for (unsigned channel_index = 0; channel_index < num_channels; ++channel_index) {
-            channel_vectors[channel_index] = filter_output.Rotate(channel_index * channel_size);
+        std::vector<Ctxt> ctxts;
+        for (auto& vec : filter_outputs) {
+            auto data = vec.GetData();
+            std::move(data.begin(), data.end(), std::back_inserter(ctxts));
         }
 
-        filter_output = CkksVector::AddMany(channel_vectors);
+        auto crypto_context = data_.GetContext().GetCryptoContext();
+        auto filter_ctxt    = crypto_context->EvalAddMany(ctxts);
+        auto filter_output  = CkksVector({filter_ctxt}, channel_size, data_.GetContext()) + bias.Get({filter_index});
+        //         filter_output.PrecomputeRotations();
 
-        // Zero out the other channels
-        std::vector<double> filter_mask(num_channels * channel_size, 0);
-        std::fill(filter_mask.begin(), filter_mask.begin() + channel_size, 1);
-        filter_output += bias.Get({filter_index});
-        filter_output *= filter_mask;
-        filter_output.SetNumElements(channel_size);
+        //         // Consolidate the output of every filter channel in the first channel
+        //         std::vector<CkksVector> channel_vectors(num_channels);
+        // #pragma omp parallel for
+        //         for (unsigned channel_index = 0; channel_index < num_channels; ++channel_index) {
+        //             channel_vectors[channel_index] = filter_output.Rotate(channel_index * channel_size);
+        //         }
 
+        //         filter_output = CkksVector::AddMany(channel_vectors);
+
+        //         // Zero out the other channels
+        //         std::vector<double> filter_mask(num_channels * channel_size, 0);
+        //         std::fill(filter_mask.begin(), filter_mask.begin() + channel_size, 1);
+        //         filter_output += bias.Get({filter_index});
+        //         filter_output *= filter_mask;
+        //         filter_output.SetNumElements(channel_size);
+
+        // conv_output.Concat(filter_output);
         conv_output.Concat(filter_output);
     }
 
@@ -252,93 +261,93 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
     return CkksTensor(conv_output, conv_shape);
 }
 
-CkksTensor CkksTensor::AvgPool2D() const {
-    const auto crypto_context = data_.GetContext().GetCryptoContext();
-    const auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
-    const shape_t new_shape{shape_[0], shape_[1] / 2, shape_[2] / 2};
-    const auto new_channel_size = new_shape[1] * new_shape[2];
+// CkksTensor CkksTensor::AvgPool2D() const {
+//     const auto crypto_context = data_.GetContext().GetCryptoContext();
+//     const auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
+//     const shape_t new_shape{shape_[0], shape_[1] / 2, shape_[2] / 2};
+//     const auto new_channel_size = new_shape[1] * new_shape[2];
 
-    CkksVector output_data = data_;
-    std::vector<double> mask(output_data.GetData().size() * batch_size);
+//     CkksVector output_data = data_;
+//     std::vector<double> mask(output_data.GetData().size() * batch_size);
 
-    // Average
-    output_data += output_data.Rotate(1) + output_data.Rotate(shape_[2]) + output_data.Rotate(shape_[2] + 1);
-    for (unsigned i = 0; i < mask.size(); ++i) {
-        mask[i] = (i / shape_[2]) % 2 == 0 && i % 2 == 0 ? 0.25 : 0;  // Every other column in every other row
-    }
-    output_data *= mask;
+//     // Average
+//     output_data += output_data.Rotate(1) + output_data.Rotate(shape_[2]) + output_data.Rotate(shape_[2] + 1);
+//     for (unsigned i = 0; i < mask.size(); ++i) {
+//         mask[i] = (i / shape_[2]) % 2 == 0 && i % 2 == 0 ? 0.25 : 0;  // Every other column in every other row
+//     }
+//     output_data *= mask;
 
-    // Condense columns
-    for (int i = 0; i < log2(shape_[2]) - 1; ++i) {
-        output_data += output_data.Rotate(1 << i);
-        for (unsigned j = 0; j < mask.size(); ++j) {
-            mask[j] = (j / shape_[2]) % 2 == 0 && j / (1 << (i + 1)) % 2 == 0 ? 1 : 0;
-        }
-        output_data *= mask;
-    }
+//     // Condense columns
+//     for (int i = 0; i < log2(shape_[2]) - 1; ++i) {
+//         output_data += output_data.Rotate(1 << i);
+//         for (unsigned j = 0; j < mask.size(); ++j) {
+//             mask[j] = (j / shape_[2]) % 2 == 0 && j / (1 << (i + 1)) % 2 == 0 ? 1 : 0;
+//         }
+//         output_data *= mask;
+//     }
 
-    // Condense rows
-    for (int i = 0; i < log2(new_shape[1]) - 1; i += 2) {
-        auto num_rotations = std::min(static_cast<unsigned>(4), new_shape[1] / (1 << i));
+//     // Condense rows
+//     for (int i = 0; i < log2(new_shape[1]) - 1; i += 2) {
+//         auto num_rotations = std::min(static_cast<unsigned>(4), new_shape[1] / (1 << i));
 
-        if (num_rotations == 4) {
-            output_data.PrecomputeRotations();
-        }
-        std::vector<CkksVector> rotations(num_rotations - 1);
-#pragma omp parallel for
-        for (unsigned j = 1; j < num_rotations; ++j) {
-            auto rotation_amount = 3 * j * (new_shape[2] * (1 << i));
-            rotations[j - 1]     = output_data.Rotate(rotation_amount);
-        }
-        for (auto& ctxt : rotations) {
-            output_data += ctxt;
-        }
+//         if (num_rotations == 4) {
+//             output_data.PrecomputeRotations();
+//         }
+//         std::vector<CkksVector> rotations(num_rotations - 1);
+// #pragma omp parallel for
+//         for (unsigned j = 1; j < num_rotations; ++j) {
+//             auto rotation_amount = 3 * j * (new_shape[2] * (1 << i));
+//             rotations[j - 1]     = output_data.Rotate(rotation_amount);
+//         }
+//         for (auto& ctxt : rotations) {
+//             output_data += ctxt;
+//         }
 
-#pragma omp parallel for
-        for (unsigned j = 0; j < mask.size(); ++j) {
-            mask[j] = (j / (4 * new_shape[2] * (1 << i))) % 4 == 0 ? 1 : 0;
-        }
-        output_data *= mask;
-    }
+// #pragma omp parallel for
+//         for (unsigned j = 0; j < mask.size(); ++j) {
+//             mask[j] = (j / (4 * new_shape[2] * (1 << i))) % 4 == 0 ? 1 : 0;
+//         }
+//         output_data *= mask;
+//     }
 
-    // Condense Channels
-    for (int i = 0; i < log2(new_shape[0]) - 1; ++i) {
-        auto num_rotations  = std::min(static_cast<unsigned>(4), new_shape[0] / (1 << i));
-        unsigned block_size = new_channel_size * pow(4, i);
-        if (16 * block_size > batch_size) {
-            break;
-        }
+//     // Condense Channels
+//     for (int i = 0; i < log2(new_shape[0]) - 1; ++i) {
+//         auto num_rotations  = std::min(static_cast<unsigned>(4), new_shape[0] / (1 << i));
+//         unsigned block_size = new_channel_size * pow(4, i);
+//         if (16 * block_size > batch_size) {
+//             break;
+//         }
 
-        // Move channels into position
-        if (num_rotations == 4) {
-            output_data.PrecomputeRotations();
-        }
-        std::vector<CkksVector> rotations(num_rotations - 1);
-#pragma omp parallel for
-        for (unsigned j = 1; j < num_rotations; ++j) {
-            auto rotation_amount = 3 * j * block_size;
-            rotations[j - 1]     = output_data.Rotate(rotation_amount);
-        }
+//         // Move channels into position
+//         if (num_rotations == 4) {
+//             output_data.PrecomputeRotations();
+//         }
+//         std::vector<CkksVector> rotations(num_rotations - 1);
+// #pragma omp parallel for
+//         for (unsigned j = 1; j < num_rotations; ++j) {
+//             auto rotation_amount = 3 * j * block_size;
+//             rotations[j - 1]     = output_data.Rotate(rotation_amount);
+//         }
 
-        for (auto& ctxt : rotations) {
-            output_data += ctxt;
-        }
-        // Mask in the first and mask out the next three (channels / block of 4 channels / block of 16 channels / etc.)
-        std::fill(mask.begin(), mask.end(), 0);
-#pragma omp parallel for
-        for (unsigned j = 0; j < mask.size(); ++j) {
-            auto block_number = j / (block_size * 4);
-            mask[j]           = block_number % 4 == 0 ? 1 : 0;
-        }
-        output_data *= mask;
-    }
+//         for (auto& ctxt : rotations) {
+//             output_data += ctxt;
+//         }
+//         // Mask in the first and mask out the next three (channels / block of 4 channels / block of 16 channels / etc.)
+//         std::fill(mask.begin(), mask.end(), 0);
+// #pragma omp parallel for
+//         for (unsigned j = 0; j < mask.size(); ++j) {
+//             auto block_number = j / (block_size * 4);
+//             mask[j]           = block_number % 4 == 0 ? 1 : 0;
+//         }
+//         output_data *= mask;
+//     }
 
-    // Condense Ciphertexts
-    output_data.Condense(batch_size / 4);
+//     // Condense Ciphertexts
+//     output_data.Condense(batch_size / 4);
 
-    output_data.SetNumElements(new_shape[0] * new_shape[1] * new_shape[2]);
-    return CkksTensor(output_data, new_shape);
-}
+//     output_data.SetNumElements(new_shape[0] * new_shape[1] * new_shape[2]);
+//     return CkksTensor(output_data, new_shape);
+// }
 
 CkksTensor CkksTensor::ReLU(unsigned depth, double scale) const {
     auto relu_function = [](double x) -> double {

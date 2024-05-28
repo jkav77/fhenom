@@ -147,8 +147,8 @@ CkksVector CkksVector::GetSum() const {
         throw std::invalid_argument("Data is empty. Cannot sum.");
     }
 
-    auto crypto_context = context_.GetCryptoContext();
-    size_t batch_size   = crypto_context->GetEncodingParams()->GetBatchSize();
+    auto crypto_context   = context_.GetCryptoContext();
+    size_t slots_per_ctxt = context_.GetSlotsPerCtxt();
 
     Ctxt sum_ctxt;
     if (data_.size() == 1) {
@@ -158,7 +158,7 @@ CkksVector CkksVector::GetSum() const {
         sum_ctxt = crypto_context->EvalAddMany(data_);
     }
 
-    for (unsigned i = 0; i < log2(batch_size); ++i) {
+    for (unsigned i = 0; i < log2(slots_per_ctxt); ++i) {
         crypto_context->EvalAddInPlace(sum_ctxt, crypto_context->EvalRotate(sum_ctxt, 1 << i));
     }
     return CkksVector(std::vector<Ctxt>{sum_ctxt}, 1, context_);
@@ -169,10 +169,10 @@ CkksVector CkksVector::GetCount(const double value, const double max_value) cons
 
     // Remove trailing zeros that IsEqual counted as equal so EvalSum doesn't count them
     auto crypto_context = context_.GetCryptoContext();
-    auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
-    auto remainder      = numElements_ % batch_size;
+    auto slots_per_ctxt = context_.GetSlotsPerCtxt();
+    auto remainder      = numElements_ % slots_per_ctxt;
     if (remainder) {
-        std::vector<double> mask(batch_size, 0);
+        std::vector<double> mask(slots_per_ctxt, 0);
         std::fill(mask.begin() + remainder, mask.end(), -1);
         auto ptxt             = crypto_context->MakeCKKSPackedPlaintext(mask);
         is_equal.data_.back() = crypto_context->EvalAdd(is_equal.data_.back(), ptxt);
@@ -183,7 +183,9 @@ CkksVector CkksVector::GetCount(const double value, const double max_value) cons
 }
 
 CkksVector CkksVector::Rotate(int rotation_index) const {
-    const auto batch_size = context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize();
+    spdlog::warn("Rotating is bad, mkay");
+
+    const auto slots_per_ctxt = context_.GetSlotsPerCtxt();
     if (rotation_index == 0) {
         return *this;
     }
@@ -200,7 +202,7 @@ CkksVector CkksVector::Rotate(int rotation_index) const {
         throw std::invalid_argument("Data is empty. Cannot rotate.");
     }
 
-    if (std::abs(rotation_index) >= batch_size) {
+    if (std::abs(rotation_index) >= slots_per_ctxt) {
         spdlog::error("Cannot rotate by more than the batch size.");
         throw std::invalid_argument("Cannot rotate by more than the batch size.");
     }
@@ -251,7 +253,7 @@ CkksVector CkksVector::Rotate(int rotation_index) const {
 
 CkksVector& CkksVector::operator*=(const std::vector<double>& rhs) {
     auto crypto_context = context_.GetCryptoContext();
-    auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
+    auto slots_per_ctxt = context_.GetSlotsPerCtxt();
     precomputedRotations_.clear();
 
     if (size() == 0) {
@@ -259,14 +261,14 @@ CkksVector& CkksVector::operator*=(const std::vector<double>& rhs) {
         throw std::invalid_argument("Data is empty. Cannot multiply.");
     }
 
-    if (rhs.size() != size() && rhs.size() != batch_size * data_.size()) {
+    if (rhs.size() != size() && rhs.size() != slots_per_ctxt * data_.size()) {
         spdlog::error("Cannot multiply vectors of different sizes.");
         throw std::invalid_argument("Cannot multiply vectors of different sizes.");
     }
 
     for (unsigned i = 0; i < data_.size(); ++i) {
-        auto start        = rhs.begin() + i * batch_size;
-        auto end          = rhs.begin() + std::min((i + 1) * batch_size, static_cast<unsigned>(rhs.size()));
+        auto start        = rhs.begin() + i * slots_per_ctxt;
+        auto end          = rhs.begin() + std::min((i + 1) * slots_per_ctxt, rhs.size());
         auto values_slice = std::vector<double>(start, end);
         data_[i]          = crypto_context->EvalMult(data_[i], crypto_context->MakeCKKSPackedPlaintext(values_slice));
     }
@@ -324,8 +326,8 @@ CkksVector& CkksVector::operator+=(const double& rhs) {
 }
 
 CkksVector& CkksVector::operator+=(const std::vector<double>& rhs) {
-    size_t batch_size = context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize();
-    if (rhs.size() != size() && rhs.size() != data_.size() * batch_size) {
+    size_t slots_per_ctxt = context_.GetSlotsPerCtxt();
+    if (rhs.size() != size() && rhs.size() != data_.size() * slots_per_ctxt) {
         spdlog::error("Cannot add vectors of different sizes.");
         throw std::invalid_argument("Cannot add vectors of different sizes.");
     }
@@ -333,9 +335,9 @@ CkksVector& CkksVector::operator+=(const std::vector<double>& rhs) {
     precomputedRotations_.clear();
 
     for (unsigned i = 0; i < data_.size(); ++i) {
-        auto batch_rhs =
-            std::vector<double>(rhs.begin() + i * batch_size, rhs.begin() + std::min((i + 1) * batch_size, rhs.size()));
-        data_[i] = context_.GetCryptoContext()->EvalAdd(
+        auto batch_rhs = std::vector<double>(rhs.begin() + i * slots_per_ctxt,
+                                             rhs.begin() + std::min((i + 1) * slots_per_ctxt, rhs.size()));
+        data_[i]       = context_.GetCryptoContext()->EvalAdd(
             data_[i], context_.GetCryptoContext()->MakeCKKSPackedPlaintext(batch_rhs));
     }
 
@@ -377,7 +379,7 @@ void CkksVector::PrecomputeRotations() {
 
 void CkksVector::Concat(const CkksVector& rhs) {
     auto crypto_context = context_.GetCryptoContext();
-    auto batch_size     = crypto_context->GetEncodingParams()->GetBatchSize();
+    auto slots_per_ctxt = context_.GetSlotsPerCtxt();
     precomputedRotations_.clear();
 
     if (crypto_context != rhs.context_.GetCryptoContext()) {
@@ -395,7 +397,7 @@ void CkksVector::Concat(const CkksVector& rhs) {
         return;
     }
 
-    auto space_remaining = data_.size() * batch_size - numElements_;
+    auto space_remaining = data_.size() * slots_per_ctxt - numElements_;
 
     if (space_remaining == 0) {
         std::copy(rhs.data_.begin(), rhs.data_.end(), std::back_inserter(data_));
@@ -404,56 +406,57 @@ void CkksVector::Concat(const CkksVector& rhs) {
     }
 
     if (space_remaining >= rhs.size()) {
-        data_.back() += rhs.Rotate(space_remaining).data_.front();
+        data_.back() += rhs.Rotate(-(size() % slots_per_ctxt)).data_.front();
         numElements_ += rhs.size();
         return;
     }
 
-    std::vector<double> mask_first_part(rhs.size(), 1);
-    std::fill(mask_first_part.begin(), mask_first_part.begin() + space_remaining, 0);
-    auto mask_first_part_ptxt = crypto_context->MakeCKKSPackedPlaintext(mask_first_part);
+    std::vector<double> mask_out_first_part(slots_per_ctxt, 0);
+    std::fill(mask_out_first_part.begin() + space_remaining, mask_out_first_part.begin() + slots_per_ctxt, 1);
 
-    std::vector<double> mask_second_part(rhs.size(), 0);
-    std::fill(mask_second_part.begin(), mask_second_part.begin() + space_remaining, 1);
-    auto mask_second_part_ptxt = crypto_context->MakeCKKSPackedPlaintext(mask_second_part);
+    std::vector<double> mask_out_second_part(slots_per_ctxt, 0);
+    std::fill(mask_out_second_part.begin(), mask_out_second_part.begin() + space_remaining, 1);
 
-    auto tmp = rhs.Rotate(space_remaining);
-    for (const auto& ctxt : tmp.data_) {
-        crypto_context->EvalAddInPlace(data_.back(), crypto_context->EvalMult(ctxt, mask_first_part_ptxt));
-        data_.push_back(crypto_context->EvalMult(ctxt, mask_second_part_ptxt));
+    auto first_part  = rhs * mask_out_second_part;
+    first_part       = first_part.Rotate(space_remaining - slots_per_ctxt);
+    auto second_part = rhs * mask_out_first_part;
+    second_part      = second_part.Rotate(slots_per_ctxt - space_remaining);
+    for (unsigned i = 0; i < rhs.GetData().size(); ++i) {
+        crypto_context->EvalAddInPlace(data_.back(), first_part.GetData()[i]);
+        data_.push_back(second_part.GetData()[i]);
     }
     numElements_ = size() + rhs.size();
 }
 
-void CkksVector::Condense(unsigned num_elements) {
-    auto crypto_context   = context_.GetCryptoContext();
-    const auto batch_size = crypto_context->GetEncodingParams()->GetBatchSize();
+// void CkksVector::Condense(unsigned num_elements) {
+//     auto crypto_context       = context_.GetCryptoContext();
+//     const auto slots_per_ctxt = context_.GetSlotsPerCtxt();
 
-    if (precomputedRotations_.empty()) {
-        PrecomputeRotations();
-    }
+//     if (precomputedRotations_.empty()) {
+//         PrecomputeRotations();
+//     }
 
-    auto new_ctxts        = std::vector<Ctxt>(ceil(static_cast<double>(num_elements * data_.size()) / batch_size));
-    auto num_per_new_ctxt = std::min(batch_size / num_elements, static_cast<unsigned>(data_.size()));
-    auto new_num_elements = num_elements * data_.size();
+//     auto new_ctxts        = std::vector<Ctxt>(ceil(static_cast<double>(num_elements * data_.size()) / slots_per_ctxt));
+//     auto num_per_new_ctxt = std::min(slots_per_ctxt / num_elements, data_.size());
+//     auto new_num_elements = num_elements * data_.size();
 
-#pragma omp parallel for
-    for (unsigned i = 0; i < data_.size(); ++i) {
-        auto rotation_amount = (-i * num_elements) % batch_size;
-        data_[i]             = CkksVector({data_[i]}, num_elements, context_).Rotate(rotation_amount).GetData()[0];
-    }
+// #pragma omp parallel for
+//     for (unsigned i = 0; i < data_.size(); ++i) {
+//         auto rotation_amount = (-i * num_elements) % slots_per_ctxt;
+//         data_[i]             = CkksVector({data_[i]}, num_elements, context_).Rotate(rotation_amount).GetData()[0];
+//     }
 
-#pragma omp parallel for
-    for (unsigned i = 0; i < new_ctxts.size(); ++i) {
-        auto start   = data_.begin() + i * num_per_new_ctxt;
-        auto end     = start + num_per_new_ctxt;
-        auto ctxts   = std::vector<Ctxt>(start, end);
-        new_ctxts[i] = crypto_context->EvalAddMany(ctxts);
-    }
+// #pragma omp parallel for
+//     for (unsigned i = 0; i < new_ctxts.size(); ++i) {
+//         auto start   = data_.begin() + i * num_per_new_ctxt;
+//         auto end     = start + num_per_new_ctxt;
+//         auto ctxts   = std::vector<Ctxt>(start, end);
+//         new_ctxts[i] = crypto_context->EvalAddMany(ctxts);
+//     }
 
-    numElements_ = new_num_elements;
-    data_        = new_ctxts;
-}
+//     numElements_ = new_num_elements;
+//     data_        = new_ctxts;
+// }
 
 // CkksVector CkksVector::Merge(const std::vector<CkksVector>& vectors, unsigned num_elements) {
 //     if (vectors.empty()) {
@@ -541,6 +544,7 @@ void CkksVector::Condense(unsigned num_elements) {
 
 void CkksVector::Encrypt(const std::vector<double>& data) {
     precomputedRotations_.clear();
+    auto slots_per_ctxt = context_.GetSlotsPerCtxt();
 
     if (data.empty()) {
         spdlog::error("Data is empty. Cannot encrypt.");
@@ -559,8 +563,8 @@ void CkksVector::Encrypt(const std::vector<double>& data) {
 
     this->data_.clear();
 
-    for (size_t i = 0; i < data.size(); i += context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize()) {
-        auto end         = std::min(i + context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize(), data.size());
+    for (size_t i = 0; i < data.size(); i += slots_per_ctxt) {
+        auto end         = std::min(i + slots_per_ctxt, data.size());
         const auto k_tmp = std::vector<double>(data.begin() + i, data.begin() + end);
         auto ptxt        = context_.GetCryptoContext()->MakeCKKSPackedPlaintext(k_tmp);
         auto ctxt        = context_.GetCryptoContext()->Encrypt(context_.GetKeyPair().publicKey, ptxt);
@@ -592,8 +596,11 @@ std::vector<double> CkksVector::Decrypt() const {
         context_.GetCryptoContext()->Decrypt(context_.GetKeyPair().secretKey, ctxt, &ptxt);
 
         auto remaining = numElements_ - result.size();
-        if (remaining < context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize()) {
+        if (remaining < context_.GetSlotsPerCtxt()) {
             ptxt->SetLength(remaining);
+        }
+        else {
+            ptxt->SetLength(context_.GetSlotsPerCtxt());
         }
 
         auto tmp = ptxt->GetRealPackedValue();
