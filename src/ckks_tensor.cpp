@@ -152,7 +152,22 @@ std::pair<bool, std::string> validate_conv2d_input(const fhenom::Tensor& kernel,
     return {true, ""};
 }
 
+void report_time(const std::string& message, const std::chrono::time_point<std::chrono::high_resolution_clock>& start,
+                 int64_t& total_time) {
+    auto end      = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    total_time += duration / 1000;
+    spdlog::info("{}: {}ms, {}s total", message, duration, total_time);
+}
+
 CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias) const {
+    static int64_t rotate_images_time           = 0;
+    static int64_t gen_filter_vectors_time      = 0;
+    static int64_t multiply_rotated_images_time = 0;
+    static int64_t move_filter_outputs_time     = 0;
+    static int64_t add_filter_outputs_time      = 0;
+    static int64_t concat_filter_outputs_time   = 0;
+
     {
         auto [validation_result, message] = validate_conv2d_input(kernel, bias, shape_);
         if (!validation_result) {
@@ -171,7 +186,9 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
     auto padding         = (kernel_num_rows - 1) / 2;
 
     // Create rotated images, which will be reused for every filter
+    auto start          = std::chrono::high_resolution_clock::now();
     auto rotated_images = rotate_images(kernel_shape);
+    report_time("Rotate images time", start, rotate_images_time);
 
     // The vector to hold the results of applying all filter convolutions
     CkksVector conv_output(data_.GetContext());
@@ -180,6 +197,7 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
     for (unsigned filter_index = 0; filter_index < num_filters; ++filter_index) {
         std::vector<std::vector<double>> filter(kernel_size, std::vector<double>(num_channels * channel_size));
 
+        start = std::chrono::high_resolution_clock::now();
         // Generate a filter vector for every (row, column) in the kernel
         for (unsigned row_index = 0; row_index < kernel_num_rows; ++row_index) {
             for (unsigned col_index = 0; col_index < kernel_num_cols; ++col_index) {
@@ -216,23 +234,30 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
                 }
             }
         }
+        report_time("Generate filter vectors", start, gen_filter_vectors_time);
 
         // Multiply the rotated images by the kernel vectors and add up the results
+        start = std::chrono::high_resolution_clock::now();
         std::vector<CkksVector> filter_outputs(kernel_size);
 #pragma omp parallel for
         for (unsigned kernel_index = 0; kernel_index < kernel_size; ++kernel_index) {
             filter_outputs[kernel_index] = rotated_images[kernel_index] * filter[kernel_index];
         }
+        report_time("Multiply rotated images", start, multiply_rotated_images_time);
 
+        start = std::chrono::high_resolution_clock::now();
         std::vector<Ctxt> ctxts;
         for (auto& vec : filter_outputs) {
             auto data = vec.GetData();
             std::move(data.begin(), data.end(), std::back_inserter(ctxts));
         }
+        report_time("Move filter outputs", start, move_filter_outputs_time);
 
+        start               = std::chrono::high_resolution_clock::now();
         auto crypto_context = data_.GetContext().GetCryptoContext();
         auto filter_ctxt    = crypto_context->EvalAddMany(ctxts);
         auto filter_output  = CkksVector({filter_ctxt}, channel_size, data_.GetContext()) + bias.Get({filter_index});
+        report_time("Add filter outputs", start, add_filter_outputs_time);
         //         filter_output.PrecomputeRotations();
 
         //         // Consolidate the output of every filter channel in the first channel
@@ -252,7 +277,9 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
         //         filter_output.SetNumElements(channel_size);
 
         // conv_output.Concat(filter_output);
+        start = std::chrono::high_resolution_clock::now();
         conv_output.Concat(filter_output);
+        report_time("Concat filter outputs", start, concat_filter_outputs_time);
     }
 
     // Output number of channels is the number of filters we applied
