@@ -16,6 +16,8 @@ class Tensor {
     fhenom::shape_t shape_;
     std::vector<int> offsets_;
 
+    void CalculateOffsets();
+
 public:
     Tensor() = default;
 
@@ -75,6 +77,10 @@ public:
     void serialize(Archive& archive) {
         archive(shape_, data_);
     }
+
+    static std::pair<Tensor, Tensor> FuseConvBN(const std::pair<Tensor, Tensor>& conv,
+                                                const std::tuple<Tensor, Tensor, Tensor, Tensor>& bn,
+                                                const double epsilon = 1e-9);
 };
 
 }  // namespace fhenom

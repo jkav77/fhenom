@@ -77,8 +77,6 @@ public:
         return shape_;
     }
 
-    unsigned GetIndex(fhenom::shape_t position) const;
-
     //////////////////////////////////////////////////////////////////////////////
     // Utility Functions
 

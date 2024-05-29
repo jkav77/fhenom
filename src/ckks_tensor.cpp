@@ -1,11 +1,13 @@
 #include <fhenom/ckks_tensor.h>
 #include <fhenom/ckks_vector.h>
+#include <fhenom/tensor.h>
 #include <spdlog/spdlog.h>
 
 #include <utility>
 #include "coefficients.h"
 
 using fhenom::CkksTensor;
+using fhenom::Tensor;
 
 CkksTensor::CkksTensor(const CkksVector& data, const shape_t& shape, bool sparse) {
     SetData(data, shape, sparse);

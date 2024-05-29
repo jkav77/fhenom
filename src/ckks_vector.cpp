@@ -203,8 +203,8 @@ CkksVector CkksVector::Rotate(int rotation_index) const {
     }
 
     if (std::abs(rotation_index) >= slots_per_ctxt) {
-        spdlog::error("Cannot rotate by more than the batch size.");
-        throw std::invalid_argument("Cannot rotate by more than the batch size.");
+        spdlog::error("Cannot rotate by more than the number of slots.");
+        throw std::invalid_argument("Cannot rotate by more than the number of slots.");
     }
 
     std::vector<Ctxt> result   = data_;
