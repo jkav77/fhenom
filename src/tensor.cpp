@@ -62,8 +62,7 @@ void Tensor::Reshape(const shape_t& shape) {
 }
 
 std::pair<Tensor, Tensor> Tensor::FuseConvBN(const std::pair<Tensor, Tensor>& conv,
-                                             const std::tuple<Tensor, Tensor, Tensor, Tensor>& bn,
-                                             const double epsilon) {
+                                             const std::tuple<Tensor, Tensor, Tensor, Tensor>& bn, double epsilon) {
     auto [conv_weights, conv_bias]                   = conv;
     auto [bn_weights, bn_bias, bn_mean, bn_variance] = bn;
 

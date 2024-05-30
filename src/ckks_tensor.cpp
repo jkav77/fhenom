@@ -158,8 +158,8 @@ void report_time(const std::string& message, const std::chrono::time_point<std::
                  int64_t& total_time) {
     auto end      = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    total_time += duration / 1000;
-    spdlog::info("{}: {}ms, {}s total", message, duration, total_time);
+    total_time += duration;
+    spdlog::debug("{}: {}ms, {:.1f}s total", message, duration, total_time / 1000.0);
 }
 
 CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias) const {
@@ -283,6 +283,13 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
         conv_output.Concat(filter_output);
         report_time("Concat filter outputs", start, concat_filter_outputs_time);
     }
+
+    spdlog::info("Rotate images time: {:.1f}s", rotate_images_time);
+    spdlog::info("Generate filter vectors time: {:.1f}s", gen_filter_vectors_time);
+    spdlog::info("Multiply rotated images time: {:.1f}s", multiply_rotated_images_time);
+    spdlog::info("Move filter outputs time: {:.1f}s", move_filter_outputs_time);
+    spdlog::info("Add filter outputs time: {:.1f}s", add_filter_outputs_time);
+    spdlog::info("Concat filter outputs time: {:.1f}s", concat_filter_outputs_time);
 
     // Output number of channels is the number of filters we applied
     fhenom::shape_t conv_shape = {num_filters, shape_[1], shape_[2]};

@@ -75,12 +75,12 @@ public:
      */
     template <class Archive>
     void serialize(Archive& archive) {
-        archive(shape_, data_);
+        archive(shape_, data_, offsets_);
     }
 
     static std::pair<Tensor, Tensor> FuseConvBN(const std::pair<Tensor, Tensor>& conv,
                                                 const std::tuple<Tensor, Tensor, Tensor, Tensor>& bn,
-                                                const double epsilon = 1e-9);
+                                                double epsilon = 1e-9);
 };
 
 }  // namespace fhenom
