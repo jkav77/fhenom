@@ -44,7 +44,6 @@ protected:
         spdlog::set_level(spdlog::level::debug);
 
         context_ = Context{GetParameters()};
-        context_.SetSlotsPerCtxt(1024);
         context_.GenerateKeys();
         context_.GenerateRotateKeys({-1,    -2,    -4,    -8,    -16,    -32,  -64,  -128, -256, -512,
                                      -1024, -2048, -4096, -8192, -16384, 1,    2,    4,    8,    16,
@@ -83,10 +82,7 @@ TEST_F(CkksTensorTest, DefaultConstructor) {
 }
 
 TEST_F(CkksTensorTest, Conv2D) {
-    context_.SetSlotsPerCtxt(25);
-    ckks_vector_.SetContext(context_);
-    ckks_vector_.Encrypt(test_data_);
-    ckks_tensor_      = CkksTensor{ckks_vector_, {3, 5, 5}};
+    spdlog::debug("Starting conv 1");
     CkksTensor tensor = ckks_tensor_.Conv2D(kernel_, fhenom::Tensor{{0}, {1}});
     ASSERT_EQ(tensor.GetShape(), (shape_t{1, 5, 5}));
     CkksVector vec = tensor.GetData();
@@ -105,6 +101,7 @@ TEST_F(CkksTensorTest, Conv2D) {
     ASSERT_NEAR(result[19], 0.18, epsilon_);
     ASSERT_NEAR(result[18], 0.27, epsilon_);
 
+    spdlog::debug("Starting convolution2");
     tensor = ckks_tensor_.Conv2D(kernel2_, fhenom::Tensor{{0, 0}, {2}});
     vec    = tensor.GetData();
     ASSERT_EQ(vec.size(), 50);
@@ -137,6 +134,7 @@ TEST_F(CkksTensorTest, Conv2D) {
     ASSERT_NEAR(result[44], 0.36, epsilon_);
     ASSERT_NEAR(result[43], 0.54, epsilon_);
 
+    spdlog::debug("Starting conv 3");
     // Conv layer with 4 filters
     std::vector<double> weights(108);
     for (unsigned i = 0; i < 4; ++i) {
@@ -267,7 +265,6 @@ TEST_F(CkksTensorTest, RotateImages) {
 TEST_F(CkksTensorTest, Conv2DCifar10) {
     auto image           = loadImage();
     auto [weights, bias] = loadWeights();
-    context_.SetSlotsPerCtxt(1024);
     ckks_vector_.SetContext(context_);
     ckks_vector_.Encrypt(image);
     ckks_tensor_.SetData(ckks_vector_, {3, 32, 32});

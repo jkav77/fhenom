@@ -3,12 +3,13 @@ cmake_minimum_required (VERSION 3.22 )
 project(fhenom VERSION 0.1 LANGUAGES CXX DESCRIPTION "Tasty FHE machine learning library.")
 set(CMAKE_CXX_STANDARD 20)
 
-find_package( spdlog 1.9.2 CONFIG REQUIRED )
+find_package( spdlog 1.13.0 CONFIG REQUIRED )
 
 find_package( OpenFHE 1.1.4 CONFIG REQUIRED )
 set( CMAKE_CXX_FLAGS "${OpenFHE_CXX_FLAGS}" )
 set( CMAKE_CXX_FLAGS_DEBUG "-O0 -g" )
 message(STATUS "OpenFHE CXX flags: ${OpenFHE_CXX_FLAGS}")
+set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} _deps )
 set( CMAKE_BINARY_DIR "build" )
 set( CMAKE_SOURCE_DIR "src" )
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_HOME_DIRECTORY}/bin )
@@ -16,6 +17,7 @@ set( FETCHCONTENT_BASE_DIR ${CMAKE_HOME_DIRECTORY}/_deps )
 
 
 include_directories( include )
+include_directories( _deps/include )
 include_directories( SYSTEM ${OPENMP_INCLUDES} )
 include_directories( SYSTEM ${OpenFHE_INCLUDE} )
 include_directories( SYSTEM ${OpenFHE_INCLUDE}/third-party/include )

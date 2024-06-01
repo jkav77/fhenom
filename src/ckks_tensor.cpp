@@ -9,6 +9,9 @@
 using fhenom::CkksTensor;
 using fhenom::Tensor;
 
+void report_time(const std::string& message, const std::chrono::time_point<std::chrono::high_resolution_clock>& start,
+                 int64_t& total_time);
+
 CkksTensor::CkksTensor(const CkksVector& data, const shape_t& shape, bool sparse) {
     SetData(data, shape, sparse);
 }
@@ -78,33 +81,44 @@ CkksTensor CkksTensor::Dense(const Tensor& weights, const Tensor& bias) const {
         throw std::invalid_argument("Input size does not match number of weights");
     }
 
+    int64_t total_inner_product_time = 0;
+    auto start                       = std::chrono::high_resolution_clock::now();
     std::vector<CkksVector> channel_outputs(num_outputs);
     auto weights_data = weights.GetData();
 #pragma omp parallel for
     for (unsigned output_index = 0; output_index < num_outputs; ++output_index) {
-        // Multiply by weights
+        int64_t inner_product_time = 0;
+        auto start                 = std::chrono::high_resolution_clock::now();
+        // Multiply by weights for first part of inner product
         auto weights_start = weights_data.begin() + flattened_size * output_index;
         auto weights_end   = weights_start + flattened_size;
         std::vector<double> ctxt_weights(weights_start, weights_end);
+        spdlog::debug("Output {}: Multiply by weights", output_index);
         CkksVector output_channel = data_ * ctxt_weights;
 
-        // Sum up the results
+        // Sum up the results to complete inner product
+        spdlog::debug("Output {}: Sum", output_index);
         output_channel = output_channel.GetSum();
         output_channel.SetNumElements(10);
 
-        // Mask the correct index
+        // Mask the correct index (all indices have the same value)
+        spdlog::debug("Output {}: Mask", output_index);
         std::vector<double> mask(num_outputs);
         mask[output_index] = 1;
         output_channel *= mask;
+        report_time("Inner product for channel " + std::to_string(output_index), start, inner_product_time);
 
-        // Add to vector of results
+        // Add to vector of results so we can use AddMany later
         channel_outputs[output_index] = output_channel;
     }
+    report_time("Total inner product time", start, total_inner_product_time);
 
     // EvalAddMany the results
+    spdlog::debug("Output: Add Many");
     auto output_data = CkksVector::AddMany(channel_outputs);
 
     // Add the bias
+    spdlog::debug("Output: Add Bias");
     output_data += bias;
 
     output_data.SetNumElements(num_outputs);
@@ -163,12 +177,10 @@ void report_time(const std::string& message, const std::chrono::time_point<std::
 }
 
 CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor& bias) const {
-    static int64_t rotate_images_time           = 0;
-    static int64_t gen_filter_vectors_time      = 0;
-    static int64_t multiply_rotated_images_time = 0;
-    static int64_t move_filter_outputs_time     = 0;
-    static int64_t add_filter_outputs_time      = 0;
-    static int64_t concat_filter_outputs_time   = 0;
+    int64_t rotate_images_time           = 0;
+    int64_t multiply_rotated_images_time = 0;
+    int64_t add_filter_outputs_time      = 0;
+    int64_t rotate_to_channel_time       = 0;
 
     {
         auto [validation_result, message] = validate_conv2d_input(kernel, bias, shape_);
@@ -177,34 +189,34 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
         }
     }
 
-    auto kernel_shape    = kernel.GetShape();
-    auto kernel_size     = kernel_shape[2] * kernel_shape[3];
-    auto num_channels    = kernel_shape[1];
-    auto num_filters     = kernel_shape[0];
-    auto kernel_num_rows = kernel_shape[2];
-    auto kernel_num_cols = kernel_shape[3];
-    auto channel_size    = shape_[1] * shape_[2];
-    auto data_num_cols   = shape_[2];
-    auto padding         = (kernel_num_rows - 1) / 2;
+    auto kernel_shape             = kernel.GetShape();
+    auto kernel_size              = kernel_shape[2] * kernel_shape[3];
+    auto num_input_channels       = kernel_shape[1];
+    auto num_output_channels      = kernel_shape[0];
+    auto kernel_num_rows          = kernel_shape[2];
+    auto kernel_num_cols          = kernel_shape[3];
+    auto channel_size             = shape_[1] * shape_[2];
+    auto data_num_cols            = shape_[2];
+    auto padding                  = (kernel_num_rows - 1) / 2;
+    auto batch_size               = data_.GetContext().GetCryptoContext()->GetEncodingParams()->GetBatchSize();
+    unsigned int num_output_ctxts = ceil(static_cast<double>(num_output_channels) * channel_size / batch_size);
 
     // Create rotated images, which will be reused for every filter
     auto start          = std::chrono::high_resolution_clock::now();
     auto rotated_images = rotate_images(kernel_shape);
     report_time("Rotate images time", start, rotate_images_time);
 
-    // The vector to hold the results of applying all filter convolutions
-    CkksVector conv_output(data_.GetContext());
+    std::vector<CkksVector> channel_outputs;
 
     // Generate an output channel for every filter in the kernel tensor
-    for (unsigned filter_index = 0; filter_index < num_filters; ++filter_index) {
-        std::vector<std::vector<double>> filter(kernel_size, std::vector<double>(num_channels * channel_size));
+    for (unsigned filter_index = 0; filter_index < num_output_channels; ++filter_index) {
+        std::vector<std::vector<double>> filter(kernel_size, std::vector<double>(num_input_channels * channel_size));
 
-        start = std::chrono::high_resolution_clock::now();
-        // Generate a filter vector for every (row, column) in the kernel
+        // Generate kernel vectors for every (row, column) in the kernel
         for (unsigned row_index = 0; row_index < kernel_num_rows; ++row_index) {
             for (unsigned col_index = 0; col_index < kernel_num_cols; ++col_index) {
                 // Add weights for each channel to the filter vector
-                for (unsigned channel_index = 0; channel_index < num_channels; ++channel_index) {
+                for (unsigned channel_index = 0; channel_index < num_input_channels; ++channel_index) {
                     auto channel_offset = channel_index * channel_size;
                     auto kernel_index   = row_index * kernel_num_cols + col_index;
                     auto start          = filter[kernel_index].begin() + channel_offset;
@@ -236,7 +248,6 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
                 }
             }
         }
-        report_time("Generate filter vectors", start, gen_filter_vectors_time);
 
         // Multiply the rotated images by the kernel vectors and add up the results
         start = std::chrono::high_resolution_clock::now();
@@ -247,53 +258,66 @@ CkksTensor CkksTensor::Conv2D(const fhenom::Tensor& kernel, const fhenom::Tensor
         }
         report_time("Multiply rotated images", start, multiply_rotated_images_time);
 
-        start = std::chrono::high_resolution_clock::now();
-        std::vector<Ctxt> ctxts;
-        for (auto& vec : filter_outputs) {
-            auto data = vec.GetData();
-            std::move(data.begin(), data.end(), std::back_inserter(ctxts));
-        }
-        report_time("Move filter outputs", start, move_filter_outputs_time);
-
-        start               = std::chrono::high_resolution_clock::now();
-        auto crypto_context = data_.GetContext().GetCryptoContext();
-        auto filter_ctxt    = crypto_context->EvalAddMany(ctxts);
-        auto filter_output  = CkksVector({filter_ctxt}, channel_size, data_.GetContext()) + bias.Get({filter_index});
+        start              = std::chrono::high_resolution_clock::now();
+        auto filter_output = CkksVector::AddMany(filter_outputs);
         report_time("Add filter outputs", start, add_filter_outputs_time);
-        //         filter_output.PrecomputeRotations();
 
-        //         // Consolidate the output of every filter channel in the first channel
-        //         std::vector<CkksVector> channel_vectors(num_channels);
-        // #pragma omp parallel for
-        //         for (unsigned channel_index = 0; channel_index < num_channels; ++channel_index) {
-        //             channel_vectors[channel_index] = filter_output.Rotate(channel_index * channel_size);
-        //         }
-
-        //         filter_output = CkksVector::AddMany(channel_vectors);
-
-        //         // Zero out the other channels
-        //         std::vector<double> filter_mask(num_channels * channel_size, 0);
-        //         std::fill(filter_mask.begin(), filter_mask.begin() + channel_size, 1);
-        //         filter_output += bias.Get({filter_index});
-        //         filter_output *= filter_mask;
-        //         filter_output.SetNumElements(channel_size);
-
-        // conv_output.Concat(filter_output);
         start = std::chrono::high_resolution_clock::now();
-        conv_output.Concat(filter_output);
-        report_time("Concat filter outputs", start, concat_filter_outputs_time);
+        filter_output.PrecomputeRotations();
+        // Consolidate the output of every filter channel in the correct channel
+        std::vector<CkksVector> channel_vectors(num_input_channels);
+#pragma omp parallel for
+        for (unsigned channel_index = 0; channel_index < num_input_channels; ++channel_index) {
+            auto ctxt_position = ((channel_index - filter_index) * channel_size) % batch_size;
+            spdlog::debug("Moving channel {} in filter {} to position {}", channel_index, filter_index, ctxt_position);
+            channel_vectors[channel_index] = filter_output.Rotate(ctxt_position);
+        }
+
+        filter_output = CkksVector::AddMany(channel_vectors);
+        report_time("Rotate to channel position", start, rotate_to_channel_time);
+
+        spdlog::debug("Add bias");
+        filter_output += bias.Get({filter_index});
+
+        // Clone ciphertext to make room for all channels
+        {
+            auto tmp = filter_output.GetData();
+            spdlog::debug("Cloning to create {} ciphertexts and support {} channels size {}", num_output_ctxts,
+                          num_output_channels, channel_size);
+            std::vector<Ctxt> new_data(num_output_ctxts, tmp[0]);
+            filter_output.SetData(new_data, channel_size);
+        }
+
+        // Zero out the other channels
+        spdlog::debug("Create filter mask for filter output size {} and capacity {}", filter_output.size(),
+                      filter_output.capacity());
+        std::vector<double> filter_mask(filter_output.capacity(), 0);
+        auto start_offset = filter_index * channel_size;
+        auto end_offset   = channel_size;
+        spdlog::debug("Creating filter with size {}, Start offset: {}, End offset: {}", filter_output.capacity(),
+                      start_offset, end_offset);
+        auto start = filter_mask.begin() + filter_index * channel_size;
+        auto end   = start + channel_size;
+        std::fill(start, end, 1);
+
+        spdlog::debug("Apply filter mask");
+        filter_output *= filter_mask;
+        filter_output.SetNumElements(channel_size);
+
+        channel_outputs.push_back(filter_output);
     }
 
-    spdlog::info("Rotate images time: {:.1f}s", rotate_images_time);
-    spdlog::info("Generate filter vectors time: {:.1f}s", gen_filter_vectors_time);
-    spdlog::info("Multiply rotated images time: {:.1f}s", multiply_rotated_images_time);
-    spdlog::info("Move filter outputs time: {:.1f}s", move_filter_outputs_time);
-    spdlog::info("Add filter outputs time: {:.1f}s", add_filter_outputs_time);
-    spdlog::info("Concat filter outputs time: {:.1f}s", concat_filter_outputs_time);
+    // The vector to hold the results of applying all filter convolutions
+    CkksVector conv_output = CkksVector::AddMany(channel_outputs);
+
+    spdlog::info("Rotate images time: {:.1f}s", rotate_images_time / 1000.0);
+    spdlog::info("Multiply rotated images time: {:.1f}s", multiply_rotated_images_time / 1000.0);
+    spdlog::info("Add filter outputs time: {:.1f}s", add_filter_outputs_time / 1000.0);
+    spdlog::info("Rotate to channel position time: {:.1f}s", rotate_to_channel_time / 1000.0);
 
     // Output number of channels is the number of filters we applied
-    fhenom::shape_t conv_shape = {num_filters, shape_[1], shape_[2]};
-    conv_output.SetNumElements(num_filters * channel_size);
+    fhenom::shape_t conv_shape = {num_output_channels, shape_[1], shape_[2]};
+    conv_output.SetNumElements(num_output_channels * channel_size);
     return CkksTensor(conv_output, conv_shape);
 }
 
@@ -395,10 +419,6 @@ CkksTensor CkksTensor::ReLU(unsigned depth, double scale) const {
     };
 
     CkksVector relu;
-
-    if (scale != 1.0) {
-        depth--;
-    }
 
     switch (depth) {
         case 4:

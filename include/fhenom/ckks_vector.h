@@ -17,7 +17,7 @@ namespace fhenom {
  * length and provides some homomorphic vector operations.
  */
 class CkksVector {
-protected:
+private:
     std::vector<Ctxt> data_;
     std::size_t numElements_;
     fhenom::Context context_;
@@ -353,6 +353,10 @@ public:
      */
     inline std::size_t size() const {
         return numElements_;
+    }
+
+    inline std::size_t capacity() const {
+        return data_.size() * context_.GetCryptoContext()->GetEncodingParams()->GetBatchSize();
     }
 
     inline void SetNumElements(std::size_t numElements) {
