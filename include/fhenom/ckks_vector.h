@@ -247,40 +247,8 @@ public:
      */
     void Concat(const CkksVector& rhs);
 
-    // /**
-    //  * @brief Condense the ciphertexts in the vector to the first `num_elements`
-    //  *
-    //  * @param num_elements The number of elements to keep from each ciphertext
-    //  * @note This method assumes all ciphertexts are already masked with zeroes outside the elements to keep.
-    //  */
-    // void Condense(unsigned num_elements);
-
-    // /**
-    //  * @brief Create a vector consisting of the first `num_elements` slots of each of the parameter vectors
-    //  *
-    //  * @param vectors A list of vectors to merge
-    //  * @param num_elements the number of elements to merge from each vector
-    //  * @return CkksVector A vector containing the first `num_elements` slots of each input vector in the slot
-    //  *
-    //  * @note This method assumes all vectors are already masked with zeroes outside the elements to merge.
-    //  */
-    // static CkksVector Merge(const std::vector<CkksVector>& vectors, unsigned num_elements = 1);
-    //
-    // /**
-    //  * @brief Create a vector consisting of the first `num_elements` slots of each of the parameter ciphertexts
-    //  *
-    //  * @param ctxts a list of ciphertexts to merge
-    //  * @param num_elements the number of elements to merge from each ciphertext
-    //  * @return CkksVector A vector containing the first `num_elements` slots of each input ciphertext
-    //  *
-    //  * @note This method assumes all ciphertexts are already masked with zeroes outside the elements to merge.
-    //  */
-    // static CkksVector Merge(const std::vector<Ctxt>& ctxts, unsigned num_elements = 1);
-
     ////////////////////////////////////////////////////////////////////////////
     // File I/O
-
-    // friend class cereal::access;
 
     /**
      * @brief Tells cereal how to serialize this class
