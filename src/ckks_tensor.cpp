@@ -350,6 +350,13 @@ CkksTensor CkksTensor::ReLU(unsigned depth, double scale) const {
             break;
 
         case 12:
+//             std::vector<double> new_g3_coeffs(kG3Coeffs.size());
+//             for (int i = 0; i < kG3Coeffs.size(); ++i) {
+// new_g3_coeffs[i] = kG3Coeffs[i]
+//             }
+//             relu = data_.EvalPoly(kG3Coeffs);
+//             relu = relu.EvalPoly(kG2Coeffs);
+//             relu = data_ + data_ * relu;
             relu = data_.EvalChebyshev(relu_function, -scale, scale, 2047);
             break;
 
